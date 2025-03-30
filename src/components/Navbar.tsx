@@ -19,15 +19,21 @@ const Navbar: React.FC = () => {
         </Link>
         
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-8">
+        <div className="hidden md:flex items-center space-x-6">
           <Link to="/" className="font-medium hover:text-tattoo-purple transition-colors">
             Home
           </Link>
           <Link to="/features" className="font-medium hover:text-tattoo-purple transition-colors">
             Features
           </Link>
+          <Link to="/analyze" className="font-medium hover:text-tattoo-purple transition-colors">
+            Analyze Tattoo
+          </Link>
+          <Link to="/create" className="font-medium hover:text-tattoo-purple transition-colors">
+            Create Tattoo
+          </Link>
           <Link to="/chat" className="font-medium hover:text-tattoo-purple transition-colors">
-            Try AI Chat
+            AI Chat
           </Link>
           <Link to="/about" className="font-medium hover:text-tattoo-purple transition-colors">
             About Us
@@ -70,11 +76,25 @@ const Navbar: React.FC = () => {
               Features
             </Link>
             <Link 
+              to="/analyze" 
+              className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Analyze Tattoo
+            </Link>
+            <Link 
+              to="/create" 
+              className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Create Tattoo
+            </Link>
+            <Link 
               to="/chat" 
               className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Try AI Chat
+              AI Chat
             </Link>
             <Link 
               to="/about" 
