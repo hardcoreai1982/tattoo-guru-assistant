@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +13,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Wand2, Download, Heart, Share2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { useApiKeys } from '@/contexts/ApiKeysContext';
 
 const TattooCreator: React.FC = () => {
+  const { apiKeys, isConfigured } = useApiKeys();
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [technique, setTechnique] = useState('');
@@ -26,8 +27,98 @@ const TattooCreator: React.FC = () => {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [pastGenerations, setPastGenerations] = useState<string[]>([]);
   const [finalPrompt, setFinalPrompt] = useState('');
+  const [aiModel, setAiModel] = useState<'flux' | 'openai' | 'stablediffusion' | 'ideogram'>('flux');
   
-  const handleGenerate = () => {
+  const generateImage = async (promptText: string) => {
+    if (!isConfigured) {
+      toast.error('Please configure your API keys in settings first.');
+      return null;
+    }
+
+    if (aiModel === 'flux' && !apiKeys.fluxApiKey) {
+      toast.error('Flux API key is not configured. Please add it in settings.');
+      return null;
+    }
+
+    if (aiModel === 'openai' && !apiKeys.openAiApiKey) {
+      toast.error('OpenAI API key is not configured. Please add it in settings.');
+      return null;
+    }
+
+    if (aiModel === 'stablediffusion' && !apiKeys.stableDiffusionApiKey) {
+      toast.error('Stable Diffusion API key is not configured. Please add it in settings.');
+      return null;
+    }
+
+    if (aiModel === 'ideogram' && !apiKeys.ideogramApiKey) {
+      toast.error('Ideogram API key is not configured. Please add it in settings.');
+      return null;
+    }
+
+    try {
+      // Base generation options
+      let imageUrl = '';
+      
+      // Use appropriate API based on selected model
+      if (aiModel === 'flux') {
+        const response = await fetch('https://api.tryflux.ai/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeys.fluxApiKey}`
+          },
+          body: JSON.stringify({
+            prompt: promptText,
+            n: 1,
+            size: '1024x1024',
+            response_format: 'url'
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to generate image with Flux API');
+        }
+        
+        const data = await response.json();
+        imageUrl = data.data[0].url;
+      } 
+      else if (aiModel === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeys.openAiApiKey}`
+          },
+          body: JSON.stringify({
+            prompt: promptText,
+            n: 1,
+            size: '1024x1024',
+            response_format: 'url'
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to generate image with OpenAI DALL-E');
+        }
+        
+        const data = await response.json();
+        imageUrl = data.data[0].url;
+      }
+      else {
+        // Fallback to placeholder for other APIs that will be implemented later
+        imageUrl = '/placeholder.svg';
+        toast.info('Using placeholder image. Implementation for this AI model is coming soon.');
+      }
+      
+      return imageUrl;
+    } catch (error) {
+      console.error('Error generating image:', error);
+      toast.error('Error generating image. Please try again later.');
+      return null;
+    }
+  };
+  
+  const handleGenerate = async () => {
     if (!prompt) {
       toast.error('Please enter a description for your tattoo.');
       return;
@@ -47,45 +138,128 @@ const TattooCreator: React.FC = () => {
     
     setFinalPrompt(finalPromptText);
     
-    // Mock image generation - in a real app, this would call an API
-    setTimeout(() => {
-      // In a real app, we'd get an image from the API
-      const mockImage = '/placeholder.svg';
-      setGeneratedImage(mockImage);
+    // Determine which AI model to use
+    // For lettering/text tattoos, use Ideogram
+    if (prompt.toLowerCase().includes('letter') || prompt.toLowerCase().includes('text') || prompt.toLowerCase().includes('script')) {
+      setAiModel('ideogram');
+    } 
+    // Otherwise use the default model (Flux)
+    else {
+      setAiModel('flux');
+    }
+    
+    try {
+      const imageUrl = await generateImage(finalPromptText);
       
-      // Add to past generations
-      setPastGenerations((prev) => [mockImage, ...prev.slice(0, 3)]);
-      
+      if (imageUrl) {
+        setGeneratedImage(imageUrl);
+        setPastGenerations(prev => [imageUrl, ...prev.slice(0, 3)]);
+        toast.success('Your tattoo design has been generated!');
+      }
+    } catch (error) {
+      console.error('Error in handleGenerate:', error);
+      toast.error('Failed to generate design. Please try again.');
+    } finally {
       setIsGenerating(false);
-      
-      toast.success('Your tattoo design has been generated!');
-    }, 3000);
+    }
   };
   
-  const handleMagicPrompt = () => {
+  const handleMagicPrompt = async () => {
     const basePrompt = prompt || 'tattoo';
     setIsGenerating(true);
     
-    // Mock enhanced prompt generation
-    setTimeout(() => {
+    if (!apiKeys.openAiApiKey) {
+      toast.error('OpenAI API key is required for Magic Prompt feature.');
+      setIsGenerating(false);
+      return;
+    }
+    
+    try {
+      // Use OpenAI to enhance the prompt
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKeys.openAiApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a tattoo artist assistant that helps create detailed prompts for tattoo designs. Your task is to enhance the user\'s input into a detailed, descriptive prompt for an AI image generator to create a tattoo design.'
+            },
+            {
+              role: 'user',
+              content: `Create a detailed prompt for a tattoo design based on this description: "${basePrompt}". Include details about style, technique, composition, and visual elements. Make it suitable for an AI image generator to create a tattoo design.`
+            }
+          ],
+          max_tokens: 500
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate enhanced prompt');
+      }
+      
+      const data = await response.json();
+      const enhancedPrompt = data.choices[0].message.content;
+      
+      setPrompt(enhancedPrompt);
+      toast.success('Enhanced prompt created with AI assistance!');
+    } catch (error) {
+      console.error('Error generating magic prompt:', error);
+      toast.error('Failed to enhance prompt. Using basic prompt instead.');
+      
+      // Fallback to a simple enhancement
       const enhancedPrompt = `A detailed ${style || 'traditional'} tattoo of ${basePrompt} with intricate ${technique || 'line work'}, featuring a ${composition || 'balanced'} composition. Use a ${colorPalette || 'vibrant'} color scheme, designed for ${placement || 'arm'} placement.`;
       
       setPrompt(enhancedPrompt);
+    } finally {
       setIsGenerating(false);
-      toast.success('Enhanced prompt created with AI assistance!');
-    }, 1500);
+    }
   };
   
   const handleSave = () => {
-    toast.success('Design saved to your collection!');
+    if (generatedImage) {
+      // In a real app, this would save to user's collection in a database
+      toast.success('Design saved to your collection!');
+    }
   };
   
   const handleDownload = () => {
-    toast.success('Design downloaded successfully!');
+    if (generatedImage) {
+      // Create a temporary anchor element to download the image
+      const link = document.createElement('a');
+      link.href = generatedImage;
+      link.download = `tattoo-design-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Design downloaded successfully!');
+    }
   };
   
   const handleShare = () => {
-    toast.success('Sharing options opened!');
+    if (generatedImage) {
+      // In a real app, this would open sharing options
+      if (navigator.share) {
+        navigator.share({
+          title: 'My Tattoo Design',
+          text: 'Check out this tattoo design I created!',
+          url: generatedImage
+        })
+          .then(() => toast.success('Shared successfully!'))
+          .catch((error) => {
+            console.error('Error sharing:', error);
+            toast.error('Failed to share. Try downloading and sharing manually.');
+          });
+      } else {
+        // Fallback for browsers that don't support navigator.share
+        toast.info('Copy the image to share it with others.');
+      }
+    }
   };
   
   return (
@@ -214,7 +388,7 @@ const TattooCreator: React.FC = () => {
             <Button 
               className="w-full bg-tattoo-purple hover:bg-tattoo-purple/90"
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !isConfigured}
             >
               {isGenerating ? 'Generating...' : 'Generate Tattoo'}
             </Button>
@@ -222,7 +396,7 @@ const TattooCreator: React.FC = () => {
               variant="outline" 
               className="w-full"
               onClick={handleMagicPrompt}
-              disabled={isGenerating}
+              disabled={isGenerating || !apiKeys.openAiApiKey}
             >
               <Wand2 className="mr-2 h-4 w-4" />
               Magic Prompt
