@@ -3,18 +3,26 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
+import { Upload, Image as ImageIcon, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { useApiKeys } from '@/contexts/ApiKeysContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const TattooAnalyzer: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const { apiKeys } = useApiKeys();
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        toast.error('Image is too large. Please upload an image smaller than 10MB.');
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = () => {
         setImage(reader.result as string);
@@ -24,51 +32,47 @@ const TattooAnalyzer: React.FC = () => {
     }
   };
   
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!image) {
       toast.error('Please upload an image first.');
       return;
     }
     
+    if (!apiKeys.openAiApiKey && !apiKeys.fluxApiKey) {
+      toast.error('Please configure your API keys in the settings panel first.');
+      return;
+    }
+    
     setIsAnalyzing(true);
     
-    // Mock analysis - in a real app, this would call an API
-    setTimeout(() => {
-      setAnalysisResult({
-        overview: {
-          tattooType: 'Sleeve',
-          subjectFocus: 'Japanese Dragon',
-          placement: 'Forearm',
-          purpose: 'Ornamental',
-        },
-        visualElements: {
-          composition: 'Wrap-around design with strong flow',
-          lineWork: 'Bold traditional outlines',
-          detailDensity: 'Highly detailed',
-          shadingStyle: 'Smooth gradient',
-          colorPalette: 'Full-color, traditional Japanese',
-          contrast: 'High contrast',
-        },
-        technique: {
-          primaryTechnique: 'Japanese Irezumi',
-          inkSaturation: 'Heavy solid',
-        },
-        style: {
-          classification: 'Japanese Traditional (Irezumi)',
-          styleConfidence: 'High (95%)',
-        },
-        symbolism: {
-          motifs: 'Dragon, cherry blossoms, waves',
-          culturalContext: 'Japanese mythology',
-        },
-        recommendations: [
-          'Consider color touch-ups in 2-3 years',
-          'Strong line work should hold up well over time',
-          'Matches well with koi fish or hannya mask designs',
-        ],
+    try {
+      // Call the Supabase edge function for analysis
+      const { data, error } = await supabase.functions.invoke('analyze-tattoo', {
+        body: { image },
       });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to analyze tattoo');
+      }
+      
+      if (data?.analysis) {
+        setAnalysisResult(data.analysis);
+        toast.success('Tattoo analysis complete!');
+      } else if (data?.error) {
+        throw new Error(data.error);
+      } else {
+        throw new Error('No analysis results received');
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze the tattoo. Please try again.');
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
+  };
+  
+  const handleImageClick = () => {
+    document.getElementById('upload-image')?.click();
   };
   
   const mockImageUpload = () => {
@@ -93,7 +97,8 @@ const TattooAnalyzer: React.FC = () => {
                 <img 
                   src={image} 
                   alt="Uploaded tattoo" 
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover cursor-pointer"
+                  onClick={handleImageClick}
                 />
                 <Button 
                   variant="secondary"
@@ -139,7 +144,12 @@ const TattooAnalyzer: React.FC = () => {
               onClick={handleAnalyze}
               disabled={!image || isAnalyzing}
             >
-              {isAnalyzing ? 'Analyzing...' : 'Analyze Tattoo'}
+              {isAnalyzing ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : 'Analyze Tattoo'}
             </Button>
           </CardFooter>
         </Card>
@@ -161,6 +171,7 @@ const TattooAnalyzer: React.FC = () => {
               <div className="flex flex-col items-center justify-center h-96">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-tattoo-purple mb-4"></div>
                 <p className="text-muted-foreground">Analyzing your tattoo...</p>
+                <p className="text-sm text-muted-foreground mt-2">Our AI agent is examining style, technique, and symbolism</p>
               </div>
             ) : analysisResult ? (
               <Tabs defaultValue="overview" className="w-full">
@@ -174,121 +185,151 @@ const TattooAnalyzer: React.FC = () => {
                 
                 <TabsContent value="overview" className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Tattoo Type</p>
-                      <p>{analysisResult.overview.tattooType}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Subject Focus</p>
-                      <p>{analysisResult.overview.subjectFocus}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Placement</p>
-                      <p>{analysisResult.overview.placement}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Purpose/Mood</p>
-                      <p>{analysisResult.overview.purpose}</p>
-                    </div>
+                    {analysisResult.overview && (
+                      <>
+                        {analysisResult.overview.tattooType && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Tattoo Type</p>
+                            <p>{analysisResult.overview.tattooType}</p>
+                          </div>
+                        )}
+                        {analysisResult.overview.subjectFocus && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Subject Focus</p>
+                            <p>{analysisResult.overview.subjectFocus}</p>
+                          </div>
+                        )}
+                        {analysisResult.overview.placement && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Placement</p>
+                            <p>{analysisResult.overview.placement}</p>
+                          </div>
+                        )}
+                        {analysisResult.overview.purpose && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Purpose/Mood</p>
+                            <p>{analysisResult.overview.purpose}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                   <Separator />
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Symbolism & Motifs</p>
-                    <p>{analysisResult.symbolism.motifs}</p>
-                    <p className="text-sm text-muted-foreground">{analysisResult.symbolism.culturalContext}</p>
-                  </div>
+                  {analysisResult.symbolism && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Symbolism & Motifs</p>
+                      {analysisResult.symbolism.motifs && <p>{analysisResult.symbolism.motifs}</p>}
+                      {analysisResult.symbolism.culturalContext && (
+                        <p className="text-sm text-muted-foreground">{analysisResult.symbolism.culturalContext}</p>
+                      )}
+                    </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="visual" className="space-y-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Composition & Flow</p>
-                      <p>{analysisResult.visualElements.composition}</p>
+                  {analysisResult.visualElements && (
+                    <div className="space-y-4">
+                      {analysisResult.visualElements.composition && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Composition & Flow</p>
+                          <p>{analysisResult.visualElements.composition}</p>
+                        </div>
+                      )}
+                      {analysisResult.visualElements.lineWork && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Line Work</p>
+                          <p>{analysisResult.visualElements.lineWork}</p>
+                        </div>
+                      )}
+                      {analysisResult.visualElements.detailDensity && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Detail Density</p>
+                          <p>{analysisResult.visualElements.detailDensity}</p>
+                        </div>
+                      )}
+                      {analysisResult.visualElements.shadingStyle && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Shading Style</p>
+                          <p>{analysisResult.visualElements.shadingStyle}</p>
+                        </div>
+                      )}
+                      {analysisResult.visualElements.colorPalette && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Color Palette</p>
+                          <p>{analysisResult.visualElements.colorPalette}</p>
+                        </div>
+                      )}
+                      {analysisResult.visualElements.contrast && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Contrast</p>
+                          <p>{analysisResult.visualElements.contrast}</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Line Work</p>
-                      <p>{analysisResult.visualElements.lineWork}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Detail Density</p>
-                      <p>{analysisResult.visualElements.detailDensity}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Shading Style</p>
-                      <p>{analysisResult.visualElements.shadingStyle}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Color Palette</p>
-                      <p>{analysisResult.visualElements.colorPalette}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Contrast</p>
-                      <p>{analysisResult.visualElements.contrast}</p>
-                    </div>
-                  </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="technique" className="space-y-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Primary Technique</p>
-                      <p>{analysisResult.technique.primaryTechnique}</p>
+                  {analysisResult.technique && (
+                    <div className="space-y-4">
+                      {analysisResult.technique.primaryTechnique && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Primary Technique</p>
+                          <p>{analysisResult.technique.primaryTechnique}</p>
+                        </div>
+                      )}
+                      {analysisResult.technique.inkSaturation && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Ink Saturation</p>
+                          <p>{analysisResult.technique.inkSaturation}</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Ink Saturation</p>
-                      <p>{analysisResult.technique.inkSaturation}</p>
-                    </div>
-                  </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="style" className="space-y-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-medium">Style Classification</p>
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                          {analysisResult.style.styleConfidence}
-                        </span>
+                  {analysisResult.style && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm font-medium">Style Classification</p>
+                          {analysisResult.style.styleConfidence && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                              {analysisResult.style.styleConfidence}
+                            </span>
+                          )}
+                        </div>
+                        {analysisResult.style.classification && (
+                          <p className="text-lg font-semibold">{analysisResult.style.classification}</p>
+                        )}
                       </div>
-                      <p className="text-lg font-semibold">{analysisResult.style.classification}</p>
                     </div>
-                    
-                    <div className="p-4 bg-muted rounded-md">
-                      <p className="text-sm">Style characteristics:</p>
-                      <ul className="mt-2 space-y-1 list-disc list-inside text-sm">
-                        <li>Bold outlines</li>
-                        <li>Traditional Japanese color palette</li>
-                        <li>Symbolic imagery</li>
-                        <li>Respects flow of the body</li>
-                      </ul>
-                    </div>
-                  </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="recommendations" className="space-y-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Recommendations</p>
-                      <ul className="space-y-2">
-                        {analysisResult.recommendations.map((rec: string, index: number) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                            <span>{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-800">Care Tip</p>
-                        <p className="text-sm text-amber-700">
-                          This style typically requires touch-ups every 5-7 years to maintain vibrancy.
-                        </p>
+                  {analysisResult.recommendations && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Recommendations</p>
+                        <ul className="space-y-2">
+                          {Array.isArray(analysisResult.recommendations) ? 
+                            analysisResult.recommendations.map((rec: string, index: number) => (
+                              <li key={index} className="flex items-start gap-2">
+                                <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                                <span>{rec}</span>
+                              </li>
+                            )) : 
+                            <li className="flex items-start gap-2">
+                              <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span>{String(analysisResult.recommendations)}</span>
+                            </li>
+                          }
+                        </ul>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </TabsContent>
               </Tabs>
             ) : (
