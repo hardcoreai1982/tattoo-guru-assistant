@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Image as ImageIcon, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { Upload, Image as ImageIcon, Check, AlertCircle, RefreshCw, BadgeInfo } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useApiKeys } from '@/contexts/ApiKeysContext';
@@ -38,12 +38,13 @@ const TattooAnalyzer: React.FC = () => {
       return;
     }
     
-    if (!apiKeys.openAiApiKey && !apiKeys.fluxApiKey) {
-      toast.error('Please configure your API keys in the settings panel first.');
+    if (!apiKeys.openAiApiKey) {
+      toast.error('Please configure your OpenAI API key in the settings panel first.');
       return;
     }
     
     setIsAnalyzing(true);
+    toast.info('Analyzing your tattoo... This may take a moment.');
     
     try {
       // Call the Supabase edge function for analysis
@@ -71,13 +72,8 @@ const TattooAnalyzer: React.FC = () => {
     }
   };
   
-  const handleImageClick = () => {
+  const handleClick = () => {
     document.getElementById('upload-image')?.click();
-  };
-  
-  const mockImageUpload = () => {
-    setImage('/placeholder.svg');
-    setAnalysisResult(null);
   };
   
   return (
@@ -93,17 +89,19 @@ const TattooAnalyzer: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {image ? (
-              <div className="relative aspect-square rounded-md overflow-hidden border-2 border-dashed border-border">
+              <div className="relative aspect-square rounded-md overflow-hidden border-2 border-dashed border-border cursor-pointer" onClick={handleClick}>
                 <img 
                   src={image} 
                   alt="Uploaded tattoo" 
-                  className="w-full h-full object-cover cursor-pointer"
-                  onClick={handleImageClick}
+                  className="w-full h-full object-cover"
                 />
                 <Button 
                   variant="secondary"
                   className="absolute bottom-4 right-4"
-                  onClick={() => setImage(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImage(null);
+                  }}
                 >
                   Change Image
                 </Button>
@@ -111,11 +109,14 @@ const TattooAnalyzer: React.FC = () => {
             ) : (
               <div 
                 className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-md cursor-pointer aspect-square"
-                onClick={() => document.getElementById('upload-image')?.click()}
+                onClick={handleClick}
               >
                 <Upload className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-center text-muted-foreground">
-                  Drag and drop your image here, or click to browse
+                  Click to upload your tattoo image
+                </p>
+                <p className="text-center text-xs text-muted-foreground mt-2">
+                  PNG, JPG or GIF (max. 10MB)
                 </p>
                 <input 
                   id="upload-image" 
@@ -124,17 +125,6 @@ const TattooAnalyzer: React.FC = () => {
                   className="hidden"
                   onChange={handleImageUpload}
                 />
-                {/* Temporary for demo */}
-                <Button 
-                  variant="link" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    mockImageUpload();
-                  }}
-                  className="mt-4"
-                >
-                  Use Demo Image
-                </Button>
               </div>
             )}
           </CardContent>
@@ -175,96 +165,29 @@ const TattooAnalyzer: React.FC = () => {
               </div>
             ) : analysisResult ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid grid-cols-5 mb-6">
+                <TabsList className="grid grid-cols-6 mb-6">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="visual">Visual</TabsTrigger>
                   <TabsTrigger value="technique">Technique</TabsTrigger>
                   <TabsTrigger value="style">Style</TabsTrigger>
+                  <TabsTrigger value="history">History</TabsTrigger>
                   <TabsTrigger value="recommendations">Tips</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview" className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     {analysisResult.overview && (
-                      <>
-                        {analysisResult.overview.tattooType && (
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Tattoo Type</p>
-                            <p>{analysisResult.overview.tattooType}</p>
-                          </div>
-                        )}
-                        {analysisResult.overview.subjectFocus && (
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Subject Focus</p>
-                            <p>{analysisResult.overview.subjectFocus}</p>
-                          </div>
-                        )}
-                        {analysisResult.overview.placement && (
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Placement</p>
-                            <p>{analysisResult.overview.placement}</p>
-                          </div>
-                        )}
-                        {analysisResult.overview.purpose && (
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">Purpose/Mood</p>
-                            <p>{analysisResult.overview.purpose}</p>
-                          </div>
-                        )}
-                      </>
+                      <div className="space-y-2">
+                        <p className="text-lg">{analysisResult.overview}</p>
+                      </div>
                     )}
                   </div>
-                  <Separator />
-                  {analysisResult.symbolism && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Symbolism & Motifs</p>
-                      {analysisResult.symbolism.motifs && <p>{analysisResult.symbolism.motifs}</p>}
-                      {analysisResult.symbolism.culturalContext && (
-                        <p className="text-sm text-muted-foreground">{analysisResult.symbolism.culturalContext}</p>
-                      )}
-                    </div>
-                  )}
                 </TabsContent>
                 
                 <TabsContent value="visual" className="space-y-4">
                   {analysisResult.visualElements && (
                     <div className="space-y-4">
-                      {analysisResult.visualElements.composition && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Composition & Flow</p>
-                          <p>{analysisResult.visualElements.composition}</p>
-                        </div>
-                      )}
-                      {analysisResult.visualElements.lineWork && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Line Work</p>
-                          <p>{analysisResult.visualElements.lineWork}</p>
-                        </div>
-                      )}
-                      {analysisResult.visualElements.detailDensity && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Detail Density</p>
-                          <p>{analysisResult.visualElements.detailDensity}</p>
-                        </div>
-                      )}
-                      {analysisResult.visualElements.shadingStyle && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Shading Style</p>
-                          <p>{analysisResult.visualElements.shadingStyle}</p>
-                        </div>
-                      )}
-                      {analysisResult.visualElements.colorPalette && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Color Palette</p>
-                          <p>{analysisResult.visualElements.colorPalette}</p>
-                        </div>
-                      )}
-                      {analysisResult.visualElements.contrast && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Contrast</p>
-                          <p>{analysisResult.visualElements.contrast}</p>
-                        </div>
-                      )}
+                      <p className="text-lg">{analysisResult.visualElements}</p>
                     </div>
                   )}
                 </TabsContent>
@@ -272,18 +195,7 @@ const TattooAnalyzer: React.FC = () => {
                 <TabsContent value="technique" className="space-y-4">
                   {analysisResult.technique && (
                     <div className="space-y-4">
-                      {analysisResult.technique.primaryTechnique && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Primary Technique</p>
-                          <p>{analysisResult.technique.primaryTechnique}</p>
-                        </div>
-                      )}
-                      {analysisResult.technique.inkSaturation && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Ink Saturation</p>
-                          <p>{analysisResult.technique.inkSaturation}</p>
-                        </div>
-                      )}
+                      <p className="text-lg">{analysisResult.technique}</p>
                     </div>
                   )}
                 </TabsContent>
@@ -291,19 +203,15 @@ const TattooAnalyzer: React.FC = () => {
                 <TabsContent value="style" className="space-y-4">
                   {analysisResult.style && (
                     <div className="space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-medium">Style Classification</p>
-                          {analysisResult.style.styleConfidence && (
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                              {analysisResult.style.styleConfidence}
-                            </span>
-                          )}
-                        </div>
-                        {analysisResult.style.classification && (
-                          <p className="text-lg font-semibold">{analysisResult.style.classification}</p>
-                        )}
-                      </div>
+                      <p className="text-lg">{analysisResult.style}</p>
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="history" className="space-y-4">
+                  {analysisResult.history && (
+                    <div className="space-y-4">
+                      <p className="text-lg">{analysisResult.history}</p>
                     </div>
                   )}
                 </TabsContent>
@@ -312,21 +220,7 @@ const TattooAnalyzer: React.FC = () => {
                   {analysisResult.recommendations && (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">Recommendations</p>
-                        <ul className="space-y-2">
-                          {Array.isArray(analysisResult.recommendations) ? 
-                            analysisResult.recommendations.map((rec: string, index: number) => (
-                              <li key={index} className="flex items-start gap-2">
-                                <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                                <span>{rec}</span>
-                              </li>
-                            )) : 
-                            <li className="flex items-start gap-2">
-                              <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>{String(analysisResult.recommendations)}</span>
-                            </li>
-                          }
-                        </ul>
+                        <p className="text-lg">{analysisResult.recommendations}</p>
                       </div>
                     </div>
                   )}
