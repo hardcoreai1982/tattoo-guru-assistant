@@ -38,11 +38,6 @@ const TattooAnalyzer: React.FC = () => {
       return;
     }
     
-    if (!apiKeys.openAiApiKey) {
-      toast.error('Please configure your OpenAI API key in the settings panel first.');
-      return;
-    }
-    
     setIsAnalyzing(true);
     toast.info('Analyzing your tattoo... This may take a moment.');
     
@@ -53,6 +48,7 @@ const TattooAnalyzer: React.FC = () => {
       });
       
       if (error) {
+        console.error('Supabase function error:', error);
         throw new Error(error.message || 'Failed to analyze tattoo');
       }
       
@@ -60,8 +56,10 @@ const TattooAnalyzer: React.FC = () => {
         setAnalysisResult(data.analysis);
         toast.success('Tattoo analysis complete!');
       } else if (data?.error) {
+        console.error('Analysis error from function:', data.error);
         throw new Error(data.error);
       } else {
+        console.error('Unexpected response:', data);
         throw new Error('No analysis results received');
       }
     } catch (error) {
