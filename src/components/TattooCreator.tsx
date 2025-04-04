@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { 
   Select, 
   SelectContent, 
@@ -11,6 +12,8 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Wand2, Download, Heart, Share2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApiKeys } from '@/contexts/ApiKeysContext';
@@ -18,16 +21,36 @@ import { useApiKeys } from '@/contexts/ApiKeysContext';
 const TattooCreator: React.FC = () => {
   const { apiKeys, isConfigured } = useApiKeys();
   const [prompt, setPrompt] = useState('');
+  const [subject, setSubject] = useState('');
   const [style, setStyle] = useState('');
   const [technique, setTechnique] = useState('');
   const [composition, setComposition] = useState('');
   const [colorPalette, setColorPalette] = useState('');
   const [placement, setPlacement] = useState('');
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [pastGenerations, setPastGenerations] = useState<string[]>([]);
   const [finalPrompt, setFinalPrompt] = useState('');
   const [aiModel, setAiModel] = useState<'flux' | 'openai' | 'stablediffusion' | 'ideogram'>('flux');
+  
+  useEffect(() => {
+    const modeText = isPreviewMode ? 'tattoo on body showing placement' : 'tattoo design for printing';
+    const elements = [
+      subject && `${subject}`,
+      style && `${style} style`,
+      technique && `with ${technique} technique`,
+      composition && `in a ${composition} composition`,
+      colorPalette && `using ${colorPalette} color palette`,
+      placement && `for ${placement} placement`,
+      isPreviewMode && 'realistic tattoo on actual skin'
+    ].filter(Boolean);
+
+    if (elements.length > 0) {
+      const newPrompt = `A ${modeText} of ${elements.join(', ')}`;
+      setPrompt(newPrompt);
+    }
+  }, [subject, style, technique, composition, colorPalette, placement, isPreviewMode]);
   
   const generateImage = async (promptText: string) => {
     if (!isConfigured) {
@@ -56,10 +79,8 @@ const TattooCreator: React.FC = () => {
     }
 
     try {
-      // Base generation options
       let imageUrl = '';
       
-      // Use appropriate API based on selected model
       if (aiModel === 'flux') {
         const response = await fetch('https://api.tryflux.ai/v1/images/generations', {
           method: 'POST',
@@ -105,7 +126,6 @@ const TattooCreator: React.FC = () => {
         imageUrl = data.data[0].url;
       }
       else {
-        // Fallback to placeholder for other APIs that will be implemented later
         imageUrl = '/placeholder.svg';
         toast.info('Using placeholder image. Implementation for this AI model is coming soon.');
       }
@@ -126,27 +146,12 @@ const TattooCreator: React.FC = () => {
     
     setIsGenerating(true);
     
-    // Build the final prompt
     const finalPromptText = [
       prompt,
-      style && `Style: ${style}`,
-      technique && `Technique: ${technique}`,
-      composition && `Composition: ${composition}`,
-      colorPalette && `Color Palette: ${colorPalette}`,
-      placement && `Placement: ${placement}`,
+      isPreviewMode ? 'Show as realistic tattoo on actual skin with proper lighting and texture.' : 'Show as clean design for printing.',
     ].filter(Boolean).join('. ');
     
     setFinalPrompt(finalPromptText);
-    
-    // Determine which AI model to use
-    // For lettering/text tattoos, use Ideogram
-    if (prompt.toLowerCase().includes('letter') || prompt.toLowerCase().includes('text') || prompt.toLowerCase().includes('script')) {
-      setAiModel('ideogram');
-    } 
-    // Otherwise use the default model (Flux)
-    else {
-      setAiModel('flux');
-    }
     
     try {
       const imageUrl = await generateImage(finalPromptText);
@@ -175,7 +180,6 @@ const TattooCreator: React.FC = () => {
     }
     
     try {
-      // Use OpenAI to enhance the prompt
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -211,7 +215,6 @@ const TattooCreator: React.FC = () => {
       console.error('Error generating magic prompt:', error);
       toast.error('Failed to enhance prompt. Using basic prompt instead.');
       
-      // Fallback to a simple enhancement
       const enhancedPrompt = `A detailed ${style || 'traditional'} tattoo of ${basePrompt} with intricate ${technique || 'line work'}, featuring a ${composition || 'balanced'} composition. Use a ${colorPalette || 'vibrant'} color scheme, designed for ${placement || 'arm'} placement.`;
       
       setPrompt(enhancedPrompt);
@@ -222,14 +225,12 @@ const TattooCreator: React.FC = () => {
   
   const handleSave = () => {
     if (generatedImage) {
-      // In a real app, this would save to user's collection in a database
       toast.success('Design saved to your collection!');
     }
   };
   
   const handleDownload = () => {
     if (generatedImage) {
-      // Create a temporary anchor element to download the image
       const link = document.createElement('a');
       link.href = generatedImage;
       link.download = `tattoo-design-${Date.now()}.png`;
@@ -243,7 +244,6 @@ const TattooCreator: React.FC = () => {
   
   const handleShare = () => {
     if (generatedImage) {
-      // In a real app, this would open sharing options
       if (navigator.share) {
         navigator.share({
           title: 'My Tattoo Design',
@@ -256,7 +256,6 @@ const TattooCreator: React.FC = () => {
             toast.error('Failed to share. Try downloading and sharing manually.');
           });
       } else {
-        // Fallback for browsers that don't support navigator.share
         toast.info('Copy the image to share it with others.');
       }
     }
@@ -264,7 +263,6 @@ const TattooCreator: React.FC = () => {
   
   return (
     <div className="flex flex-col lg:flex-row gap-8">
-      {/* Left Panel - Controls */}
       <div className="w-full lg:w-1/3 space-y-6">
         <Card>
           <CardHeader>
@@ -274,6 +272,30 @@ const TattooCreator: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="mode-toggle">Mode</Label>
+                <div className="text-sm text-muted-foreground">
+                  {isPreviewMode ? 'Preview on body' : 'Design for printing'}
+                </div>
+              </div>
+              <Switch
+                id="mode-toggle"
+                checked={isPreviewMode}
+                onCheckedChange={setIsPreviewMode}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                placeholder="Wolf, dragon, flower, etc."
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="style">Tattoo Style</Label>
               <Select value={style} onValueChange={setStyle}>
@@ -383,6 +405,32 @@ const TattooCreator: React.FC = () => {
                 Be specific about subjects, elements, mood, and any symbolism you want to include.
               </p>
             </div>
+            
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="model-select">Select AI Model</Label>
+              <RadioGroup 
+                value={aiModel} 
+                onValueChange={(value: 'flux' | 'openai' | 'stablediffusion' | 'ideogram') => setAiModel(value)}
+                className="flex flex-wrap gap-4 pt-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="flux" id="flux" />
+                  <Label htmlFor="flux" className="cursor-pointer">Flux</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="stablediffusion" id="stablediffusion" />
+                  <Label htmlFor="stablediffusion" className="cursor-pointer">Stable Diffusion</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="ideogram" id="ideogram" />
+                  <Label htmlFor="ideogram" className="cursor-pointer">Ideogram</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="openai" id="openai" />
+                  <Label htmlFor="openai" className="cursor-pointer">DALL-E</Label>
+                </div>
+              </RadioGroup>
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-3">
             <Button 
@@ -405,23 +453,21 @@ const TattooCreator: React.FC = () => {
         </Card>
       </div>
       
-      {/* Right Panel - Results */}
       <div className="w-full lg:w-2/3">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Generated Design</CardTitle>
             <CardDescription>
               {generatedImage 
-                ? 'Your custom tattoo design is ready' 
+                ? `Your custom tattoo ${isPreviewMode ? 'preview' : 'design'} is ready` 
                 : 'Complete the form and generate your design'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Main Generated Image */}
             {isGenerating ? (
               <div className="flex flex-col items-center justify-center aspect-video bg-muted rounded-lg">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-tattoo-purple mb-4"></div>
-                <p className="text-muted-foreground">Generating your tattoo design...</p>
+                <p className="text-muted-foreground">Generating your tattoo {isPreviewMode ? 'preview' : 'design'}...</p>
               </div>
             ) : generatedImage ? (
               <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
@@ -453,7 +499,6 @@ const TattooCreator: React.FC = () => {
               </div>
             )}
             
-            {/* Past Generations */}
             {pastGenerations.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium">Previous Generations</p>
@@ -475,7 +520,6 @@ const TattooCreator: React.FC = () => {
               </div>
             )}
             
-            {/* Design Description */}
             {generatedImage && (
               <>
                 <Separator />
@@ -483,7 +527,9 @@ const TattooCreator: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium">Design Details</p>
                     <p className="text-sm text-muted-foreground">
-                      A {style || 'custom'} tattoo design with {technique || 'mixed'} techniques and a {composition || 'balanced'} composition.
+                      A {style || 'custom'} {isPreviewMode ? 'tattoo preview' : 'tattoo design'} 
+                      {subject ? ` of ${subject}` : ''} with {technique || 'mixed'} techniques and 
+                      a {composition || 'balanced'} composition.
                     </p>
                   </div>
                   
