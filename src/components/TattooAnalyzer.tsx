@@ -1,10 +1,12 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Image as ImageIcon, Check, AlertCircle, RefreshCw, BadgeInfo } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useApiKeys } from '@/contexts/ApiKeysContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +15,8 @@ const TattooAnalyzer: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [subject, setSubject] = useState('');
   const { apiKeys } = useApiKeys();
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +48,11 @@ const TattooAnalyzer: React.FC = () => {
     try {
       // Call the Supabase edge function for analysis
       const { data, error } = await supabase.functions.invoke('analyze-tattoo', {
-        body: { image },
+        body: { 
+          image,
+          mode: isPreviewMode ? 'preview' : 'design',
+          subject
+        },
       });
       
       if (error) {
@@ -86,6 +94,35 @@ const TattooAnalyzer: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between space-x-4">
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="mode-toggle">Design Mode</Label>
+                  <Switch 
+                    id="mode-toggle" 
+                    checked={isPreviewMode} 
+                    onCheckedChange={setIsPreviewMode}
+                  />
+                  <Label htmlFor="mode-toggle">{isPreviewMode ? 'Preview Mode' : 'Design Mode'}</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isPreviewMode 
+                    ? 'Preview shows the tattoo on your selected body part' 
+                    : 'Design mode creates a tattoo design that can be printed'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                placeholder="Enter the main subject of your tattoo"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </div>
+            
             {image ? (
               <div className="relative aspect-square rounded-md overflow-hidden border-2 border-dashed border-border cursor-pointer" onClick={handleClick}>
                 <img 
@@ -150,7 +187,7 @@ const TattooAnalyzer: React.FC = () => {
             <CardTitle>Analysis Results</CardTitle>
             <CardDescription>
               {analysisResult 
-                ? 'Review the detailed breakdown of your tattoo' 
+                ? `Review the detailed ${isPreviewMode ? 'preview' : 'design'} of your tattoo` 
                 : 'Upload an image and click "Analyze Tattoo" to get started'}
             </CardDescription>
           </CardHeader>
