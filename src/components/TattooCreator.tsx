@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -180,6 +181,16 @@ const TattooCreator: React.FC = () => {
     }
     
     try {
+      const tattooDetails = {
+        subject: subject || 'tattoo',
+        style: style || 'traditional',
+        technique: technique || 'line work',
+        composition: composition || 'balanced',
+        colorPalette: colorPalette || 'black and grey',
+        placement: placement || 'arm',
+        isPreviewMode: isPreviewMode
+      };
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -191,14 +202,25 @@ const TattooCreator: React.FC = () => {
           messages: [
             {
               role: 'system',
-              content: 'You are a tattoo artist assistant that helps create detailed prompts for tattoo designs. Your task is to enhance the user\'s input into a detailed, descriptive prompt for an AI image generator to create a tattoo design.'
+              content: 'You are a professional tattoo artist with extensive knowledge of tattoo design, techniques, styles, and cultural significance. Your task is to create highly detailed, specific prompts for AI image generators to create tattoo designs.'
             },
             {
               role: 'user',
-              content: `Create a detailed prompt for a tattoo design based on this description: "${basePrompt}". Include details about style, technique, composition, and visual elements. Make it suitable for an AI image generator to create a tattoo design.`
+              content: `Create a detailed tattoo design prompt for an AI image generator with these specifications:
+              
+              - Subject: ${tattooDetails.subject}
+              - Style: ${tattooDetails.style}
+              - Technique: ${tattooDetails.technique}
+              - Composition: ${tattooDetails.composition}
+              - Color Palette: ${tattooDetails.colorPalette}
+              - Placement: ${tattooDetails.placement}
+              - Mode: ${tattooDetails.isPreviewMode ? 'Preview on body' : 'Design for printing'}
+              
+              The prompt should be highly detailed, mentioning specific artistic elements, textures, shading techniques, line work details, and visual characteristics specific to tattoo art. Include details about depth, contrast, and how the design interacts with the body if in preview mode. DO NOT introduce new subjects or themes not mentioned above. Keep the prompt to 2-3 sentences maximum, and focus on visual descriptors rather than meanings or symbolism.`
             }
           ],
-          max_tokens: 500
+          max_tokens: 500,
+          temperature: 0.7
         })
       });
       
@@ -210,12 +232,13 @@ const TattooCreator: React.FC = () => {
       const enhancedPrompt = data.choices[0].message.content;
       
       setPrompt(enhancedPrompt);
-      toast.success('Enhanced prompt created with AI assistance!');
+      toast.success('Enhanced tattoo prompt created with AI assistance!');
     } catch (error) {
       console.error('Error generating magic prompt:', error);
       toast.error('Failed to enhance prompt. Using basic prompt instead.');
       
-      const enhancedPrompt = `A detailed ${style || 'traditional'} tattoo of ${basePrompt} with intricate ${technique || 'line work'}, featuring a ${composition || 'balanced'} composition. Use a ${colorPalette || 'vibrant'} color scheme, designed for ${placement || 'arm'} placement.`;
+      // Fallback to a manually constructed enhanced prompt
+      const enhancedPrompt = `A detailed ${style || 'traditional'} tattoo design of ${subject || 'art'} with intricate ${technique || 'line work'}, featuring a ${composition || 'balanced'} composition. Use a ${colorPalette || 'vibrant'} color scheme, designed specifically for ${placement || 'arm'} placement. ${isPreviewMode ? 'Show realistically on skin with proper lighting and depth.' : 'Create clean, printable design with strong outlines and clear details.'}`;
       
       setPrompt(enhancedPrompt);
     } finally {
