@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,20 +25,15 @@ serve(async (req) => {
 
     let imageUrl = '';
     
-    if (aiModel === 'flux' || aiModel === 'openai') {
-      const apiUrl = aiModel === 'flux' 
-        ? 'https://api.tryflux.ai/v1/images/generations' 
-        : 'https://api.openai.com/v1/images/generations';
-      
-      const apiKey = aiModel === 'flux' 
-        ? Deno.env.get('FLUX_API_KEY')
-        : Deno.env.get('OPENAI_API_KEY');
+    if (aiModel === 'flux') {
+      const apiKey = Deno.env.get('FLUX_API_KEY');
       
       if (!apiKey) {
-        throw new Error(`${aiModel.toUpperCase()}_API_KEY is not configured`);
+        throw new Error('FLUX_API_KEY is not configured');
       }
 
-      const response = await fetch(apiUrl, {
+      console.log("Calling Flux API with prompt:", prompt);
+      const response = await fetch('https://api.tryflux.ai/v1/images/generations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -53,12 +49,46 @@ serve(async (req) => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || `Failed to generate image with ${aiModel}`);
+        console.error("Flux API error:", errorData);
+        throw new Error(errorData.error?.message || `Failed to generate image with Flux: ${response.status}`);
       }
       
       const data = await response.json();
       imageUrl = data.data[0].url;
     } 
+    else if (aiModel === 'openai') {
+      const apiKey = Deno.env.get('OPENAI_API_KEY');
+      
+      if (!apiKey) {
+        throw new Error('OPENAI_API_KEY is not configured');
+      }
+
+      console.log("Calling OpenAI API with prompt:", prompt);
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024',
+          model: "dall-e-3",
+          quality: "standard",
+          response_format: 'url'
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("OpenAI API error:", errorData);
+        throw new Error(errorData.error?.message || `Failed to generate image with OpenAI: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      imageUrl = data.data[0].url;
+    }
     else if (aiModel === 'stablediffusion' || aiModel === 'ideogram') {
       // For future implementation
       return new Response(
@@ -73,6 +103,7 @@ serve(async (req) => {
       );
     }
 
+    console.log("Successfully generated image URL:", imageUrl);
     return new Response(
       JSON.stringify({ url: imageUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
