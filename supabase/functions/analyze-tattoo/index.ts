@@ -14,20 +14,71 @@ serve(async (req) => {
   }
 
   try {
-    const { image, mode = 'design', subject = '' } = await req.json();
-
-    if (!image) {
-      return new Response(
-        JSON.stringify({ error: 'No image provided' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
+    const { image, mode = 'design', subject = '', enhancePrompt = false, details = {} } = await req.json();
 
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: 'OpenAI API key not configured' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    // Handle prompt enhancement request
+    if (enhancePrompt) {
+      const enhancementResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional tattoo artist with extensive knowledge of tattoo design, techniques, styles, and cultural significance. Your task is to create highly detailed, specific prompts for AI image generators to create tattoo designs.'
+            },
+            {
+              role: 'user',
+              content: `Create a detailed tattoo design prompt for an AI image generator with these specifications:
+              
+              - Subject: ${details.subject || 'tattoo'}
+              - Style: ${details.style || 'traditional'}
+              - Technique: ${details.technique || 'line work'}
+              - Composition: ${details.composition || 'balanced'}
+              - Color Palette: ${details.colorPalette || 'black and grey'}
+              - Placement: ${details.placement || 'arm'}
+              - Mode: ${details.isPreviewMode ? 'Preview on body' : 'Design for printing'}
+              
+              The prompt should be highly detailed, mentioning specific artistic elements, textures, shading techniques, line work details, and visual characteristics specific to tattoo art. Include details about depth, contrast, and how the design interacts with the body if in preview mode. DO NOT introduce new subjects or themes not mentioned above. Keep the prompt to 2-3 sentences maximum, and focus on visual descriptors rather than meanings or symbolism.`
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.7
+        })
+      });
+
+      if (!enhancementResponse.ok) {
+        const errorData = await enhancementResponse.json();
+        console.error('OpenAI API error:', errorData);
+        throw new Error(errorData.error?.message || 'Failed to enhance prompt');
+      }
+
+      const enhancementData = await enhancementResponse.json();
+      const enhancedPrompt = enhancementData.choices[0].message.content;
+
+      return new Response(
+        JSON.stringify({ enhancedPrompt }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Original image analysis functionality
+    if (!image) {
+      return new Response(
+        JSON.stringify({ error: 'No image provided' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 

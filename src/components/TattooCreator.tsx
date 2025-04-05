@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,10 +16,9 @@ import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Wand2, Download, Heart, Share2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApiKeys } from '@/contexts/ApiKeysContext';
+import { supabase } from "@/integrations/supabase/client";
 
 const TattooCreator: React.FC = () => {
-  const { apiKeys, isConfigured } = useApiKeys();
   const [prompt, setPrompt] = useState('');
   const [subject, setSubject] = useState('');
   const [style, setStyle] = useState('');
@@ -54,88 +52,35 @@ const TattooCreator: React.FC = () => {
   }, [subject, style, technique, composition, colorPalette, placement, isPreviewMode]);
   
   const generateImage = async (promptText: string) => {
-    if (!isConfigured) {
-      toast.error('Please configure your API keys in settings first.');
-      return null;
-    }
-
-    if (aiModel === 'flux' && !apiKeys.fluxApiKey) {
-      toast.error('Flux API key is not configured. Please add it in settings.');
-      return null;
-    }
-
-    if (aiModel === 'openai' && !apiKeys.openAiApiKey) {
-      toast.error('OpenAI API key is not configured. Please add it in settings.');
-      return null;
-    }
-
-    if (aiModel === 'stablediffusion' && !apiKeys.stableDiffusionApiKey) {
-      toast.error('Stable Diffusion API key is not configured. Please add it in settings.');
-      return null;
-    }
-
-    if (aiModel === 'ideogram' && !apiKeys.ideogramApiKey) {
-      toast.error('Ideogram API key is not configured. Please add it in settings.');
-      return null;
-    }
-
+    setIsGenerating(true);
+    
     try {
-      let imageUrl = '';
+      const { data, error } = await supabase.functions.invoke('generate-tattoo', {
+        body: { 
+          prompt: promptText,
+          aiModel: aiModel
+        }
+      });
       
-      if (aiModel === 'flux') {
-        const response = await fetch('https://api.tryflux.ai/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKeys.fluxApiKey}`
-          },
-          body: JSON.stringify({
-            prompt: promptText,
-            n: 1,
-            size: '1024x1024',
-            response_format: 'url'
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to generate image with Flux API');
-        }
-        
-        const data = await response.json();
-        imageUrl = data.data[0].url;
-      } 
-      else if (aiModel === 'openai') {
-        const response = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKeys.openAiApiKey}`
-          },
-          body: JSON.stringify({
-            prompt: promptText,
-            n: 1,
-            size: '1024x1024',
-            response_format: 'url'
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to generate image with OpenAI DALL-E');
-        }
-        
-        const data = await response.json();
-        imageUrl = data.data[0].url;
-      }
-      else {
-        imageUrl = '/placeholder.svg';
-        toast.info('Using placeholder image. Implementation for this AI model is coming soon.');
+      if (error) {
+        toast.error(error.message || 'Failed to generate image');
+        console.error('Error generating image:', error);
+        return null;
       }
       
-      return imageUrl;
+      if (data.error) {
+        toast.error(data.error);
+        console.error('Error from edge function:', data.error);
+        return null;
+      }
+      
+      return data.url;
     } catch (error) {
       console.error('Error generating image:', error);
       toast.error('Error generating image. Please try again later.');
       return null;
+    } finally {
+      setIsGenerating(false);
     }
   };
   
@@ -174,12 +119,6 @@ const TattooCreator: React.FC = () => {
     const basePrompt = prompt || 'tattoo';
     setIsGenerating(true);
     
-    if (!apiKeys.openAiApiKey) {
-      toast.error('OpenAI API key is required for Magic Prompt feature.');
-      setIsGenerating(false);
-      return;
-    }
-    
     try {
       const tattooDetails = {
         subject: subject || 'tattoo',
@@ -191,48 +130,28 @@ const TattooCreator: React.FC = () => {
         isPreviewMode: isPreviewMode
       };
       
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKeys.openAiApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a professional tattoo artist with extensive knowledge of tattoo design, techniques, styles, and cultural significance. Your task is to create highly detailed, specific prompts for AI image generators to create tattoo designs.'
-            },
-            {
-              role: 'user',
-              content: `Create a detailed tattoo design prompt for an AI image generator with these specifications:
-              
-              - Subject: ${tattooDetails.subject}
-              - Style: ${tattooDetails.style}
-              - Technique: ${tattooDetails.technique}
-              - Composition: ${tattooDetails.composition}
-              - Color Palette: ${tattooDetails.colorPalette}
-              - Placement: ${tattooDetails.placement}
-              - Mode: ${tattooDetails.isPreviewMode ? 'Preview on body' : 'Design for printing'}
-              
-              The prompt should be highly detailed, mentioning specific artistic elements, textures, shading techniques, line work details, and visual characteristics specific to tattoo art. Include details about depth, contrast, and how the design interacts with the body if in preview mode. DO NOT introduce new subjects or themes not mentioned above. Keep the prompt to 2-3 sentences maximum, and focus on visual descriptors rather than meanings or symbolism.`
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.7
-        })
+      const { data, error } = await supabase.functions.invoke('analyze-tattoo', {
+        body: {
+          mode: 'design',
+          subject: tattooDetails.subject,
+          image: '', // No image to analyze, we're using this function for prompt generation
+          enhancePrompt: true, // Flag to indicate we want a prompt enhancement
+          details: tattooDetails
+        }
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to generate enhanced prompt');
+      if (error || !data || data.error) {
+        throw new Error(error?.message || data?.error || 'Failed to generate enhanced prompt');
       }
       
-      const data = await response.json();
-      const enhancedPrompt = data.choices[0].message.content;
+      const enhancedPrompt = data.enhancedPrompt;
       
-      setPrompt(enhancedPrompt);
-      toast.success('Enhanced tattoo prompt created with AI assistance!');
+      if (enhancedPrompt) {
+        setPrompt(enhancedPrompt);
+        toast.success('Enhanced tattoo prompt created with AI assistance!');
+      } else {
+        throw new Error('No prompt was generated');
+      }
     } catch (error) {
       console.error('Error generating magic prompt:', error);
       toast.error('Failed to enhance prompt. Using basic prompt instead.');
@@ -459,7 +378,7 @@ const TattooCreator: React.FC = () => {
             <Button 
               className="w-full bg-tattoo-purple hover:bg-tattoo-purple/90"
               onClick={handleGenerate}
-              disabled={isGenerating || !isConfigured}
+              disabled={isGenerating}
             >
               {isGenerating ? 'Generating...' : 'Generate Tattoo'}
             </Button>
@@ -467,7 +386,7 @@ const TattooCreator: React.FC = () => {
               variant="outline" 
               className="w-full"
               onClick={handleMagicPrompt}
-              disabled={isGenerating || !apiKeys.openAiApiKey}
+              disabled={isGenerating}
             >
               <Wand2 className="mr-2 h-4 w-4" />
               Magic Prompt
