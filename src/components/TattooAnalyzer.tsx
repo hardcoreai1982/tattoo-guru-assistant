@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,14 +6,12 @@ import { Upload, Image as ImageIcon, Check, AlertCircle, RefreshCw, BadgeInfo } 
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useApiKeys } from '@/contexts/ApiKeysContext';
 import { supabase } from '@/integrations/supabase/client';
 
 const TattooAnalyzer: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
-  const { apiKeys } = useApiKeys();
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

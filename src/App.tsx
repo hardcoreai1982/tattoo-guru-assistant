@@ -11,7 +11,6 @@ import AboutPage from "./pages/AboutPage";
 import NotFound from "./pages/NotFound";
 import TattooAnalyzePage from "./pages/TattooAnalyzePage";
 import TattooCreationPage from "./pages/TattooCreationPage";
-import { ApiKeysProvider } from "./contexts/ApiKeysContext";
 
 const queryClient = new QueryClient();
 
