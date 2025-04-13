@@ -41,7 +41,7 @@ const Navbar: React.FC = () => {
           </Link>
           <ThemeToggle />
           <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
-            Get Started
+            <Link to="/signin">Sign In</Link>
           </Button>
         </div>
 
@@ -109,7 +109,7 @@ const Navbar: React.FC = () => {
               About Us
             </Link>
             <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
-              Get Started
+              <Link to="/signin">Sign In</Link>
             </Button>
           </div>
         </div>

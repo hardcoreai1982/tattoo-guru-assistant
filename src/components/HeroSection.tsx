@@ -2,7 +2,6 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Link } from 'react-router-dom';
-import heroImage from '@/assets/hero-image.png';
 
 const HeroSection: React.FC = () => {
   return (
@@ -19,7 +18,7 @@ const HeroSection: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 text-white px-8 py-6 text-lg">
-                <Link to="/login">Sign In</Link>
+                <Link to="/signin">Sign In</Link>
               </Button>
               <Button variant="outline" className="border-tattoo-purple text-tattoo-purple hover:bg-tattoo-purple/10 px-8 py-6 text-lg">
                 <Link to="/features">Learn More</Link>
@@ -29,7 +28,7 @@ const HeroSection: React.FC = () => {
           <div className="md:w-1/2 flex justify-center">
             <div className="relative w-full max-w-md">
               <img 
-                src={heroImage} 
+                src="/placeholder.svg" 
                 alt="Tattoo Buddy Hero" 
                 className="w-full h-auto rounded-xl shadow-xl object-cover"
               />

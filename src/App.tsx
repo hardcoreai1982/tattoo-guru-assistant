@@ -11,6 +11,7 @@ import AboutPage from "./pages/AboutPage";
 import NotFound from "./pages/NotFound";
 import TattooAnalyzePage from "./pages/TattooAnalyzePage";
 import TattooCreationPage from "./pages/TattooCreationPage";
+import SignInPage from "./pages/SignInPage";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,8 @@ const App = () => (
           <Route path="/about" element={<AboutPage />} />
           <Route path="/analyze" element={<TattooAnalyzePage />} />
           <Route path="/create" element={<TattooCreationPage />} />
+          <Route path="/signin" element={<SignInPage />} />
+          <Route path="/login" element={<SignInPage />} /> {/* Alias for backward compatibility */}
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
