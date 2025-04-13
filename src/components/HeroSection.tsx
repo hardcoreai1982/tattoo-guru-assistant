@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Link } from 'react-router-dom';
-import heroImage from '@/assets/hero-image.png';  // Update this path
+import heroImage from '@/assets/hero-image.png';
 
 const HeroSection: React.FC = () => {
   return (

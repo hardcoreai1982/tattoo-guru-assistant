@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Menu, X } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -38,23 +39,27 @@ const Navbar: React.FC = () => {
           <Link to="/about" className="font-medium hover:text-tattoo-purple transition-colors">
             About Us
           </Link>
+          <ThemeToggle />
           <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
             Get Started
           </Button>
         </div>
 
         {/* Mobile Navigation Toggle */}
-        <button
-          onClick={toggleMenu}
-          className="md:hidden p-2 focus:outline-none"
-          aria-label="Toggle menu"
-        >
-          {isMenuOpen ? (
-            <X className="h-6 w-6" />
-          ) : (
-            <Menu className="h-6 w-6" />
-          )}
-        </button>
+        <div className="flex items-center md:hidden">
+          <ThemeToggle />
+          <button
+            onClick={toggleMenu}
+            className="p-2 ml-2 focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {isMenuOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <Menu className="h-6 w-6" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
