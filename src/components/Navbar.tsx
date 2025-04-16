@@ -1,12 +1,34 @@
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import { supabase } from '@/integrations/supabase/client';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check for existing session
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+    };
+    
+    getUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, []);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -40,9 +62,17 @@ const Navbar: React.FC = () => {
             About Us
           </Link>
           <ThemeToggle />
-          <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
-            <Link to="/signin">Sign In</Link>
-          </Button>
+          {user ? (
+            <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
+              <Link to="/profile" className="flex items-center gap-2">
+                <User size={16} /> Profile
+              </Link>
+            </Button>
+          ) : (
+            <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
+              <Link to="/signin">Sign In</Link>
+            </Button>
+          )}
         </div>
 
         {/* Mobile Navigation Toggle */}
@@ -108,9 +138,17 @@ const Navbar: React.FC = () => {
             >
               About Us
             </Link>
-            <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
-              <Link to="/signin">Sign In</Link>
-            </Button>
+            {user ? (
+              <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
+                <Link to="/profile" className="flex items-center gap-2 justify-center w-full">
+                  <User size={16} /> Profile
+                </Link>
+              </Button>
+            ) : (
+              <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
+                <Link to="/signin">Sign In</Link>
+              </Button>
+            )}
           </div>
         </div>
       )}

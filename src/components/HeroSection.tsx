@@ -1,9 +1,31 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 const HeroSection: React.FC = () => {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check for existing session
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+    };
+    
+    getUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <div className="relative bg-gradient-to-b from-white to-gray-100 dark:from-tattoo-black dark:to-gray-900 pt-20 pb-32 px-6">
       <div className="container mx-auto">
@@ -17,9 +39,15 @@ const HeroSection: React.FC = () => {
               From inspiration to final design, Tattoo Buddy guides you through the entire tattoo journey with expert advice and AI-powered insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 text-white px-8 py-6 text-lg">
-                <Link to="/signin">Sign In</Link>
-              </Button>
+              {user ? (
+                <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 text-white px-8 py-6 text-lg">
+                  <Link to="/profile">Your Profile</Link>
+                </Button>
+              ) : (
+                <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 text-white px-8 py-6 text-lg">
+                  <Link to="/signin">Sign In</Link>
+                </Button>
+              )}
               <Button variant="outline" className="border-tattoo-purple text-tattoo-purple hover:bg-tattoo-purple/10 px-8 py-6 text-lg">
                 <Link to="/features">Learn More</Link>
               </Button>

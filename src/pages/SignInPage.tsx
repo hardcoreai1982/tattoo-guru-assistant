@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -27,6 +27,19 @@ const SignInPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
+  useEffect(() => {
+    // Check if user is already logged in
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // If already logged in, redirect to profile
+        navigate('/profile');
+      }
+    };
+    
+    checkUser();
+  }, [navigate]);
+  
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
@@ -39,23 +52,24 @@ const SignInPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Here you would typically call your auth service
-      console.log('Sign in values:', values);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
       
-      // Simulate auth delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (error) throw error;
       
       toast({
         title: "Welcome back!",
         description: "You have successfully signed in",
       });
       
-      // Redirect to home page
-      navigate('/');
-    } catch (error) {
+      // Redirect to profile page
+      navigate('/profile');
+    } catch (error: any) {
       toast({
         title: "Sign in failed",
-        description: "Please check your credentials and try again",
+        description: error.message || "Please check your credentials and try again",
         variant: "destructive",
       });
       console.error("Sign in error:", error);
@@ -76,10 +90,10 @@ const SignInPage: React.FC = () => {
       
       if (error) throw error;
       
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Google Sign In Failed",
-        description: "There was a problem signing in with Google",
+        description: error.message || "There was a problem signing in with Google",
         variant: "destructive",
       });
       console.error("Google sign in error:", error);
