@@ -89,6 +89,43 @@ serve(async (req) => {
       const data = await response.json();
       imageUrl = data.data[0].url;
     }
+    else if (aiModel === 'gptimage') {
+      const apiKey = Deno.env.get('OPENAI_API_KEY');
+      
+      if (!apiKey) {
+        throw new Error('OPENAI_API_KEY is not configured');
+      }
+
+      console.log("Calling GPT-image-1 API with prompt:", prompt);
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024',
+          model: "gpt-image-1",
+          response_format: "b64_json" // Get base64 for gpt-image-1
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("GPT-image-1 API error:", errorData);
+        throw new Error(errorData.error?.message || `Failed to generate image with GPT-image-1: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      // For GPT-image-1, we get b64_json, so we need to convert it to URL
+      if (data.data[0].b64_json) {
+        imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
+      } else {
+        throw new Error("No b64_json returned from GPT-image-1");
+      }
+    }
     else if (aiModel === 'stablediffusion' || aiModel === 'ideogram') {
       // For future implementation
       return new Response(
@@ -103,7 +140,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Successfully generated image URL:", imageUrl);
+    console.log("Successfully generated image URL:", imageUrl.substring(0, 100) + "...");
     return new Response(
       JSON.stringify({ url: imageUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

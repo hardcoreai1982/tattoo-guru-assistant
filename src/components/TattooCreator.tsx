@@ -31,7 +31,7 @@ const TattooCreator: React.FC = () => {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [pastGenerations, setPastGenerations] = useState<string[]>([]);
   const [finalPrompt, setFinalPrompt] = useState('');
-  const [aiModel, setAiModel] = useState<'flux' | 'openai' | 'stablediffusion' | 'ideogram'>('flux');
+  const [aiModel, setAiModel] = useState<'flux' | 'openai' | 'stablediffusion' | 'ideogram' | 'gptimage'>('flux');
   
   useEffect(() => {
     const modeText = isPreviewMode ? 'tattoo on body showing placement' : 'tattoo design for printing';
@@ -352,7 +352,7 @@ const TattooCreator: React.FC = () => {
               <Label htmlFor="model-select">Select AI Model</Label>
               <RadioGroup 
                 value={aiModel} 
-                onValueChange={(value: 'flux' | 'openai' | 'stablediffusion' | 'ideogram') => setAiModel(value)}
+                onValueChange={(value: 'flux' | 'openai' | 'stablediffusion' | 'ideogram' | 'gptimage') => setAiModel(value)}
                 className="flex flex-wrap gap-4 pt-2"
               >
                 <div className="flex items-center space-x-2">
@@ -370,6 +370,10 @@ const TattooCreator: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="openai" id="openai" />
                   <Label htmlFor="openai" className="cursor-pointer">DALL-E</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gptimage" id="gptimage" />
+                  <Label htmlFor="gptimage" className="cursor-pointer">GPT-image-1</Label>
                 </div>
               </RadioGroup>
             </div>
