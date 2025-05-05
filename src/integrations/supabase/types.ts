@@ -9,7 +9,57 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      styles: {
+        Row: {
+          "Assistant Guidance Level": string | null
+          "Attributes & Tags": string | null
+          Description: string | null
+          "Detailed Description": string | null
+          Keyword: string | null
+        }
+        Insert: {
+          "Assistant Guidance Level"?: string | null
+          "Attributes & Tags"?: string | null
+          Description?: string | null
+          "Detailed Description"?: string | null
+          Keyword?: string | null
+        }
+        Update: {
+          "Assistant Guidance Level"?: string | null
+          "Attributes & Tags"?: string | null
+          Description?: string | null
+          "Detailed Description"?: string | null
+          Keyword?: string | null
+        }
+        Relationships: []
+      }
+      techniques: {
+        Row: {
+          "Assistant Guidance Level": string | null
+          "Attributes & Tags": string | null
+          "blog artical": string | null
+          "Detailed Description": string | null
+          Keyword: string | null
+          "Short Description": string | null
+        }
+        Insert: {
+          "Assistant Guidance Level"?: string | null
+          "Attributes & Tags"?: string | null
+          "blog artical"?: string | null
+          "Detailed Description"?: string | null
+          Keyword?: string | null
+          "Short Description"?: string | null
+        }
+        Update: {
+          "Assistant Guidance Level"?: string | null
+          "Attributes & Tags"?: string | null
+          "blog artical"?: string | null
+          "Detailed Description"?: string | null
+          Keyword?: string | null
+          "Short Description"?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
