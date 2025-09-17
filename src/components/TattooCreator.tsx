@@ -12,7 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Wand2, Download, Heart, Share2, Image as ImageIcon } from 'lucide-react';
+import { Wand2, Download, Heart, Share2, Image as ImageIcon, RefreshCw, Brain, Settings, Shuffle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { DesignService } from '@/services/designService';
@@ -23,6 +23,14 @@ import { useMobileOptimizations } from '@/hooks/useMobileOptimizations';
 import MobileButton from '@/components/ui/mobile-button';
 import { MobileTextarea } from '@/components/ui/mobile-input';
 import { MobileSplitLayout, MobileCard } from '@/components/MobileOptimizedLayout';
+import DesignIterationPanel from '@/components/DesignIterationPanel';
+import IntelligentModelSelector from '@/components/IntelligentModelSelector';
+import AdvancedPromptBuilder from '@/components/AdvancedPromptBuilder';
+import StyleTransferPanel from '@/components/StyleTransferPanel';
+import StyleComparisonView from '@/components/StyleComparisonView';
+import { PromptEnhancementService } from '@/services/promptEnhancementService';
+import { PromptEnhancementPipeline } from '@/services/promptEnhancementPipeline';
+import { StyleTransferService, type StyleTransferResult } from '@/services/styleTransferService';
 
 const TattooCreator: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -62,6 +70,14 @@ const TattooCreator: React.FC = () => {
   const [pastGenerations, setPastGenerations] = useState<string[]>([]);
   const [finalPrompt, setFinalPrompt] = useState('');
   const [aiModel, setAiModel] = useState<'flux' | 'openai' | 'stablediffusion' | 'ideogram' | 'gptimage'>('flux');
+  const [currentDesign, setCurrentDesign] = useState<any>(null);
+  const [showIterationPanel, setShowIterationPanel] = useState(false);
+  const [showIntelligentSelector, setShowIntelligentSelector] = useState(false);
+  const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
+  const [showStyleTransfer, setShowStyleTransfer] = useState(false);
+  const [styleTransferResult, setStyleTransferResult] = useState<StyleTransferResult | null>(null);
+  const [showStyleComparison, setShowStyleComparison] = useState(false);
+  const [enhancedPrompt, setEnhancedPrompt] = useState<string>('');
   
   useEffect(() => {
     const modeText = isPreviewMode ? 'tattoo on body showing placement' : 'tattoo design for printing';
@@ -181,6 +197,7 @@ const TattooCreator: React.FC = () => {
 
         if (savedDesign) {
           toast.success('Your tattoo design has been generated and saved!');
+          setCurrentDesign(savedDesign);
         } else {
           toast.success('Your tattoo design has been generated!');
         }
@@ -228,18 +245,33 @@ const TattooCreator: React.FC = () => {
       
       if (enhancedPrompt) {
         setPrompt(enhancedPrompt);
+        setEnhancedPrompt(enhancedPrompt);
         toast.success('Enhanced tattoo prompt created with AI assistance!');
       } else {
         throw new Error('No prompt was generated');
       }
     } catch (error) {
       console.error('Error generating magic prompt:', error);
-      toast.error('Failed to enhance prompt. Using basic prompt instead.');
-      
-      // Fallback to a manually constructed enhanced prompt
-      const enhancedPrompt = `A detailed ${style || 'traditional'} tattoo design of ${subject || 'art'} with intricate ${technique || 'line work'}, featuring a ${composition || 'balanced'} composition. Use a ${colorPalette || 'vibrant'} color scheme, designed specifically for ${placement || 'arm'} placement. ${isPreviewMode ? 'Show realistically on skin with proper lighting and depth.' : 'Create clean, printable design with strong outlines and clear details.'}`;
-      
-      setPrompt(enhancedPrompt);
+
+      // Fallback to local prompt enhancement
+      try {
+        const enhancement = PromptEnhancementService.enhancePrompt(
+          prompt || 'tattoo design',
+          style,
+          technique,
+          colorPalette,
+          placement,
+          subject,
+          isPreviewMode
+        );
+
+        setPrompt(enhancement.enhancedPrompt);
+        setEnhancedPrompt(enhancement.enhancedPrompt);
+        toast.success(`Prompt enhanced locally! Added ${enhancement.addedElements.length} improvements ✨`);
+      } catch (fallbackError) {
+        console.error('Fallback enhancement failed:', fallbackError);
+        toast.error('Failed to enhance prompt. Please try again.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -281,6 +313,55 @@ const TattooCreator: React.FC = () => {
         toast.info('Copy the image to share it with others.');
       }
     }
+  };
+
+  const handleIterationComplete = (newDesign: any) => {
+    setGeneratedImage(newDesign.image_url);
+    setCurrentDesign(newDesign);
+    setShowIterationPanel(false);
+    setPastGenerations(prev => [newDesign.image_url, ...prev.slice(0, 3)]);
+    toast.success('Design iteration completed!');
+  };
+
+  const handleModelSelect = (model: 'flux' | 'openai' | 'stablediffusion' | 'ideogram' | 'gptimage') => {
+    setAiModel(model);
+    toast.success(`Switched to ${model.toUpperCase()} model`);
+  };
+
+  const handlePromptEnhance = (enhanced: string) => {
+    setPrompt(enhanced);
+    setEnhancedPrompt(enhanced);
+    toast.success('Prompt enhanced for selected model!');
+  };
+
+  const handleAdvancedPromptGenerated = async (prompt: string, metadata?: any) => {
+    setPrompt(prompt);
+    setEnhancedPrompt(prompt);
+    setShowAdvancedBuilder(false);
+
+    // Save pipeline result if available
+    if (metadata?.pipelineResult) {
+      await PromptEnhancementPipeline.savePipelineResult(metadata.pipelineResult);
+    }
+
+    toast.success(`Advanced prompt generated! ${metadata?.confidence ? `(${metadata.confidence}% confidence)` : ''}`);
+  };
+
+  const handleStyleTransferComplete = (result: StyleTransferResult) => {
+    setStyleTransferResult(result);
+    setShowStyleComparison(true);
+    setShowStyleTransfer(false);
+    toast.success(`Style transferred from ${result.fromStyle} to ${result.toStyle}!`);
+  };
+
+  const handleStyleTransferPromptUpdate = (prompt: string) => {
+    setPrompt(prompt);
+    setEnhancedPrompt(prompt);
+  };
+
+  const handleRateStyleTransfer = async (rating: number) => {
+    // Could integrate with analytics service to track transfer ratings
+    console.log('Style transfer rated:', rating);
   };
   
   return (
@@ -469,17 +550,111 @@ const TattooCreator: React.FC = () => {
             >
               {isGenerating ? 'Generating...' : 'Generate Tattoo'}
             </MobileButton>
-            <MobileButton
-              variant="outline"
-              className="w-full"
-              onClick={handleMagicPrompt}
-              disabled={isGenerating}
-            >
-              <Wand2 className="mr-2 h-4 w-4" />
-              Magic Prompt
-            </MobileButton>
+            <div className="flex gap-2">
+              <MobileButton
+                variant="outline"
+                className="flex-1"
+                onClick={handleMagicPrompt}
+                disabled={isGenerating}
+                hapticFeedback
+              >
+                <Wand2 className="mr-2 h-4 w-4" />
+                Magic Prompt
+              </MobileButton>
+              <MobileButton
+                variant="outline"
+                onClick={() => setShowIntelligentSelector(!showIntelligentSelector)}
+                hapticFeedback
+              >
+                <Brain className="h-4 w-4" />
+              </MobileButton>
+              <MobileButton
+                variant="outline"
+                onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
+                hapticFeedback
+              >
+                <Settings className="h-4 w-4" />
+              </MobileButton>
+              <MobileButton
+                variant="outline"
+                onClick={() => setShowStyleTransfer(!showStyleTransfer)}
+                hapticFeedback
+                disabled={!style}
+              >
+                <Shuffle className="h-4 w-4" />
+              </MobileButton>
+            </div>
           </CardFooter>
           </MobileCard>
+
+          {/* Intelligent Model Selector */}
+          {showIntelligentSelector && prompt.trim() && (
+            <div className="mt-4">
+              <IntelligentModelSelector
+                prompt={prompt}
+                style={style}
+                technique={technique}
+                subject={subject}
+                colorPalette={colorPalette}
+                bodyZone={placement}
+                currentModel={aiModel}
+                onModelSelect={handleModelSelect}
+                onPromptEnhance={handlePromptEnhance}
+              />
+            </div>
+          )}
+
+          {/* Advanced Prompt Builder */}
+          {showAdvancedBuilder && (
+            <div className="mt-4">
+              <AdvancedPromptBuilder
+                initialPrompt={prompt}
+                targetModel={aiModel}
+                style={style}
+                technique={technique}
+                subject={subject}
+                colorPalette={colorPalette}
+                bodyZone={placement}
+                isPreviewMode={isPreviewMode}
+                onPromptGenerated={handleAdvancedPromptGenerated}
+              />
+            </div>
+          )}
+
+          {/* Style Transfer Panel */}
+          {showStyleTransfer && style && (
+            <div className="mt-4">
+              <StyleTransferPanel
+                originalPrompt={prompt}
+                originalStyle={style}
+                onTransferComplete={handleStyleTransferComplete}
+                onPromptUpdate={handleStyleTransferPromptUpdate}
+                availableModels={['flux', 'openai', 'stablediffusion', 'ideogram', 'gptimage']}
+                currentModel={aiModel}
+              />
+            </div>
+          )}
+
+          {/* Style Comparison View */}
+          {showStyleComparison && styleTransferResult && (
+            <div className="mt-4">
+              <StyleComparisonView
+                transferResult={styleTransferResult}
+                onRateTransfer={handleRateStyleTransfer}
+                onGenerateOriginal={() => {
+                  // Generate with original prompt and style
+                  const originalPrompt = styleTransferResult.originalPrompt;
+                  setPrompt(originalPrompt);
+                  handleGenerate();
+                }}
+                onGenerateTransferred={() => {
+                  // Generate with transferred prompt
+                  setPrompt(styleTransferResult.transferredPrompt);
+                  handleGenerate();
+                }}
+              />
+            </div>
+          )}
         </div>
       }
       right={
@@ -539,6 +714,18 @@ const TattooCreator: React.FC = () => {
                     <Share2 className="h-4 w-4" />
                     {mobile.isMobile && <span className="ml-2">Share</span>}
                   </MobileButton>
+                  {currentDesign && (
+                    <MobileButton
+                      size={mobile.isMobile ? "mobile-sm" : "sm"}
+                      variant="outline"
+                      onClick={() => setShowIterationPanel(true)}
+                      hapticFeedback
+                      className={mobile.isMobile ? "flex-1" : ""}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      {mobile.isMobile && <span className="ml-2">Iterate</span>}
+                    </MobileButton>
+                  )}
                 </div>
               </div>
             ) : (
@@ -594,6 +781,17 @@ const TattooCreator: React.FC = () => {
             )}
           </CardContent>
           </MobileCard>
+
+          {/* Design Iteration Panel */}
+          {showIterationPanel && currentDesign && (
+            <div className="mt-6">
+              <DesignIterationPanel
+                design={currentDesign}
+                onIterationComplete={handleIterationComplete}
+                onClose={() => setShowIterationPanel(false)}
+              />
+            </div>
+          )}
       }
     />
   );

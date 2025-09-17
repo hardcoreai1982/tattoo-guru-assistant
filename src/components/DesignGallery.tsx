@@ -23,11 +23,13 @@ import {
   Calendar,
   Palette,
   Sparkles,
-  Eye
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DesignService, designEvents } from '@/services/designService';
 import { supabase } from '@/integrations/supabase/client';
+import DesignIterationWorkflow from '@/components/DesignIterationWorkflow';
 import { useMobileOptimizations } from '@/hooks/useMobileOptimizations';
 import MobileButton from '@/components/ui/mobile-button';
 import { MobileGridLayout } from '@/components/MobileOptimizedLayout';
@@ -48,6 +50,8 @@ const DesignGallery: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showIterationWorkflow, setShowIterationWorkflow] = useState(false);
+  const [iterationDesign, setIterationDesign] = useState<GeneratedDesign | null>(null);
 
   const { handleError, createRetryAction } = useErrorHandler({
     context: 'Design Gallery'
@@ -200,6 +204,19 @@ const DesignGallery: React.FC = () => {
     } catch (error) {
       console.error('Error sharing design:', error);
       toast.error('Failed to share design');
+    }
+  };
+
+  const handleShowIterationWorkflow = (design: GeneratedDesign) => {
+    setIterationDesign(design);
+    setShowIterationWorkflow(true);
+  };
+
+  const handleIterationDesignSelect = (design: GeneratedDesign) => {
+    // Update the design in the gallery if it's a new iteration
+    const existingIndex = designs.findIndex(d => d.id === design.id);
+    if (existingIndex === -1) {
+      setDesigns(prev => [design, ...prev]);
     }
   };
 
@@ -426,6 +443,14 @@ const DesignGallery: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="flex-1"
+                            onClick={() => handleShowIterationWorkflow(design)}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             className="text-red-600 hover:text-red-700"
                             onClick={() => handleDeleteDesign(design.id)}
                           >
@@ -485,6 +510,13 @@ const DesignGallery: React.FC = () => {
                               onClick={() => handleShareDesign(design)}
                             >
                               <Share2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleShowIterationWorkflow(design)}
+                            >
+                              <RefreshCw className="h-3 w-3" />
                             </Button>
                             <Button
                               variant="outline"
@@ -556,6 +588,17 @@ const DesignGallery: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Design Iteration Workflow */}
+      {showIterationWorkflow && iterationDesign && (
+        <div className="mt-8">
+          <DesignIterationWorkflow
+            design={iterationDesign}
+            onDesignSelect={handleIterationDesignSelect}
+            onClose={() => setShowIterationWorkflow(false)}
+          />
+        </div>
+      )}
     </div>
   );
 };

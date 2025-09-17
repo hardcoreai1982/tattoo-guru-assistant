@@ -14,7 +14,17 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, aiModel } = await req.json();
+    const {
+      prompt,
+      aiModel,
+      style,
+      technique,
+      color_palette,
+      body_zone,
+      subject,
+      composition,
+      iteration_context
+    } = await req.json();
 
     // Input validation
     if (!prompt || typeof prompt !== 'string') {
@@ -58,8 +68,69 @@ serve(async (req) => {
       );
     }
 
+    // Enhance prompt based on iteration context and parameters
+    let enhancedPrompt = prompt;
+
+    if (iteration_context) {
+      console.log("Processing iteration context:", iteration_context);
+
+      // Add iteration-specific enhancements
+      if (iteration_context.iteration_type === 'refine') {
+        enhancedPrompt += ` [REFINED VERSION with enhanced details and improved quality]`;
+      } else if (iteration_context.iteration_type === 'style_change') {
+        enhancedPrompt += ` [STYLE MODIFICATION: ${iteration_context.feedback}]`;
+      } else if (iteration_context.iteration_type === 'color_adjustment') {
+        enhancedPrompt += ` [COLOR ADJUSTMENT: ${iteration_context.feedback}]`;
+      } else if (iteration_context.iteration_type === 'element_modification') {
+        enhancedPrompt += ` [ELEMENT CHANGES: ${iteration_context.feedback}]`;
+      } else if (iteration_context.iteration_type === 'composition_change') {
+        enhancedPrompt += ` [COMPOSITION CHANGE: ${iteration_context.feedback}]`;
+      }
+
+      // Add preservation instructions
+      if (iteration_context.preserve_elements?.length > 0) {
+        enhancedPrompt += ` [KEEP THESE ELEMENTS: ${iteration_context.preserve_elements.join(', ')}]`;
+      }
+
+      // Add removal instructions
+      if (iteration_context.remove_elements?.length > 0) {
+        enhancedPrompt += ` [REMOVE THESE ELEMENTS: ${iteration_context.remove_elements.join(', ')}]`;
+      }
+
+      // Add addition instructions
+      if (iteration_context.add_elements?.length > 0) {
+        enhancedPrompt += ` [ADD THESE ELEMENTS: ${iteration_context.add_elements.join(', ')}]`;
+      }
+    }
+
+    // Add style and technique specifications
+    if (style) {
+      enhancedPrompt += ` in ${style} style`;
+    }
+
+    if (technique) {
+      enhancedPrompt += ` using ${technique} technique`;
+    }
+
+    if (color_palette) {
+      enhancedPrompt += ` with ${color_palette} color palette`;
+    }
+
+    if (body_zone) {
+      enhancedPrompt += ` designed for ${body_zone} placement`;
+    }
+
+    console.log("Enhanced prompt:", enhancedPrompt);
+
+    // Log model selection reasoning for debugging
+    if (iteration_context) {
+      console.log("Using iteration context for model optimization");
+    } else {
+      console.log(`Selected model: ${aiModel} for prompt analysis`);
+    }
+
     let imageUrl = '';
-    
+
     if (aiModel === 'flux') {
       const apiKey = Deno.env.get('FLUX_API_KEY');
       
@@ -67,7 +138,7 @@ serve(async (req) => {
         throw new Error('FLUX_API_KEY is not configured');
       }
 
-      console.log("Calling Flux API with prompt:", prompt);
+      console.log("Calling Flux API with enhanced prompt:", enhancedPrompt);
       const response = await fetch('https://api.tryflux.ai/v1/images/generations', {
         method: 'POST',
         headers: {
@@ -75,7 +146,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          prompt: prompt,
+          prompt: enhancedPrompt,
           n: 1,
           size: '1024x1024',
           response_format: 'url'
@@ -98,7 +169,7 @@ serve(async (req) => {
         throw new Error('OPENAI_API_KEY is not configured');
       }
 
-      console.log("Calling OpenAI API with prompt:", prompt);
+      console.log("Calling OpenAI API with enhanced prompt:", enhancedPrompt);
       const response = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: {
@@ -106,7 +177,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          prompt: prompt,
+          prompt: enhancedPrompt,
           n: 1,
           size: '1024x1024',
           model: "dall-e-3",
@@ -131,7 +202,7 @@ serve(async (req) => {
         throw new Error('OPENAI_API_KEY is not configured');
       }
 
-      console.log("Calling GPT-image-1 API with prompt:", prompt);
+      console.log("Calling GPT-image-1 API with enhanced prompt:", enhancedPrompt);
       const response = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: {
@@ -139,7 +210,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          prompt: prompt,
+          prompt: enhancedPrompt,
           n: 1,
           size: '1024x1024',
           model: "gpt-image-1",
@@ -168,7 +239,7 @@ serve(async (req) => {
         throw new Error('STABILITY_API_KEY is not configured');
       }
 
-      console.log("Calling Stability AI API with prompt:", prompt);
+      console.log("Calling Stability AI API with enhanced prompt:", enhancedPrompt);
       const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
         method: 'POST',
         headers: {
@@ -179,7 +250,7 @@ serve(async (req) => {
         body: JSON.stringify({
           text_prompts: [
             {
-              text: prompt,
+              text: enhancedPrompt,
               weight: 1
             }
           ],
@@ -212,7 +283,7 @@ serve(async (req) => {
         throw new Error('IDEOGRAM_API_KEY is not configured');
       }
 
-      console.log("Calling Ideogram API with prompt:", prompt);
+      console.log("Calling Ideogram API with enhanced prompt:", enhancedPrompt);
       const response = await fetch('https://api.ideogram.ai/generate', {
         method: 'POST',
         headers: {
@@ -221,7 +292,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           image_request: {
-            prompt: prompt,
+            prompt: enhancedPrompt,
             aspect_ratio: "ASPECT_1_1",
             model: "V_2",
             magic_prompt_option: "AUTO",
