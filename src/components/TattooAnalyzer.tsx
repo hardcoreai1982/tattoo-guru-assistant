@@ -7,11 +7,42 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { DesignService } from '@/services/designService';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { TattooAnalysisLoading } from '@/components/LoadingState';
+import { useProgress, type ProgressStep } from '@/hooks/useProgress';
+import { TattooAnalysisProgress } from '@/components/ProgressIndicator';
+import { useMobileOptimizations } from '@/hooks/useMobileOptimizations';
+import MobileButton from '@/components/ui/mobile-button';
+import { MobileSplitLayout, MobileCard } from '@/components/MobileOptimizedLayout';
 
 const TattooAnalyzer: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+
+  const { handleError, createRetryAction } = useErrorHandler({
+    context: 'Tattoo Analyzer'
+  });
+
+  const mobile = useMobileOptimizations();
+
+  // Progress tracking for tattoo analysis
+  const analysisSteps: ProgressStep[] = [
+    { id: 'upload', label: 'Processing Image', description: 'Analyzing uploaded image', weight: 1, estimatedDuration: 3000 },
+    { id: 'analyze', label: 'AI Analysis', description: 'Identifying style, elements, and details', weight: 2, estimatedDuration: 8000 },
+    { id: 'generate', label: 'Creating Report', description: 'Compiling analysis results', weight: 1, estimatedDuration: 2000 }
+  ];
+
+  const progressTracker = useProgress({
+    steps: analysisSteps,
+    onComplete: () => {
+      console.log('Tattoo analysis completed!');
+    },
+    onStepChange: (step, stepIndex) => {
+      console.log(`Starting analysis step ${stepIndex + 1}: ${step.label}`);
+    }
+  });
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -35,18 +66,30 @@ const TattooAnalyzer: React.FC = () => {
       toast.error('Please upload an image first.');
       return;
     }
-    
+
     setIsAnalyzing(true);
-    toast.info('Analyzing your tattoo... This may take a moment.');
-    
+    setAnalysisResult(null);
+    progressTracker.reset();
+    progressTracker.start();
+
     try {
+      // Step 1: Process image
+      progressTracker.updateStepProgress(50, 'Preparing image for analysis...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
+      progressTracker.nextStep('Starting AI analysis...');
+
+      // Step 2: AI Analysis
+      progressTracker.updateStepProgress(25, 'Sending to AI analysis service...');
+
       // Call the Supabase edge function for analysis
       const { data, error } = await supabase.functions.invoke('analyze-tattoo', {
-        body: { 
+        body: {
           image,
           mode: 'design'
         },
       });
+
+      progressTracker.updateStepProgress(75, 'Processing analysis results...');
       
       if (error) {
         console.error('Supabase function error:', error);
@@ -54,18 +97,47 @@ const TattooAnalyzer: React.FC = () => {
       }
       
       if (data?.analysis) {
+        progressTracker.nextStep('Generating analysis report...');
+
         setAnalysisResult(data.analysis);
-        toast.success('Tattoo analysis complete!');
+
+        // Step 3: Save analysis
+        progressTracker.updateStepProgress(50, 'Saving analysis to gallery...');
+
+        // Save the analysis to database if user is authenticated
+        const savedAnalysis = await DesignService.saveAnalyzedTattoo(
+          image,
+          data.analysis,
+          'design',
+          data.analysis.subject || undefined,
+          undefined, // conversationId - could be added later
+          {
+            analysisTimestamp: new Date().toISOString(),
+            imageSize: image.length
+          }
+        );
+
+        progressTracker.updateStepProgress(100, 'Analysis complete!');
+
+        if (savedAnalysis) {
+          toast.success('Tattoo analysis complete and saved!');
+        } else {
+          toast.success('Tattoo analysis complete!');
+        }
       } else if (data?.error) {
+        progressTracker.setError(new Error(data.error));
         console.error('Analysis error from function:', data.error);
         throw new Error(data.error);
       } else {
+        progressTracker.setError(new Error('No analysis results received'));
         console.error('Unexpected response:', data);
         throw new Error('No analysis results received');
       }
     } catch (error) {
-      console.error('Analysis error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to analyze the tattoo. Please try again.');
+      progressTracker.setError(error as Error);
+      handleError(error, 'Analyze Tattoo', [
+        createRetryAction(() => handleAnalyze(), 'Try Again')
+      ]);
     } finally {
       setIsAnalyzing(false);
     }
@@ -76,10 +148,10 @@ const TattooAnalyzer: React.FC = () => {
   };
   
   return (
-    <div className="flex flex-col md:flex-row gap-8">
-      {/* Left Panel - Image Upload and Analysis Controls */}
-      <div className="w-full md:w-1/2 space-y-6">
-        <Card>
+    <MobileSplitLayout
+      left={
+        <div className="space-y-6">
+          <MobileCard>
           <CardHeader>
             <CardTitle>Upload Tattoo Image</CardTitle>
             <CardDescription>
@@ -128,24 +200,20 @@ const TattooAnalyzer: React.FC = () => {
             )}
           </CardContent>
           <CardFooter>
-            <Button 
+            <MobileButton
               className="w-full bg-tattoo-purple hover:bg-tattoo-purple/90"
               onClick={handleAnalyze}
               disabled={!image || isAnalyzing}
+              loading={isAnalyzing}
+              hapticFeedback
             >
-              {isAnalyzing ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Analyzing...
-                </>
-              ) : 'Analyze Tattoo'}
-            </Button>
+              {isAnalyzing ? 'Analyzing...' : 'Analyze Tattoo'}
+            </MobileButton>
           </CardFooter>
-        </Card>
-      </div>
-      
-      {/* Right Panel - Analysis Results */}
-      <div className="w-full md:w-1/2">
+          </MobileCard>
+        </div>
+      }
+      right={
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Analysis Results</CardTitle>
@@ -157,10 +225,8 @@ const TattooAnalyzer: React.FC = () => {
           </CardHeader>
           <CardContent className="h-full">
             {isAnalyzing ? (
-              <div className="flex flex-col items-center justify-center h-96">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-tattoo-purple mb-4"></div>
-                <p className="text-muted-foreground">Analyzing your tattoo...</p>
-                <p className="text-sm text-muted-foreground mt-2">Our AI agent is examining style, technique, and symbolism</p>
+              <div className="h-96 flex items-center justify-center">
+                <TattooAnalysisProgress progress={progressTracker} />
               </div>
             ) : analysisResult ? (
               <Tabs defaultValue="overview" className="w-full">
@@ -236,8 +302,8 @@ const TattooAnalyzer: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
+      }
+    />
   );
 };
 

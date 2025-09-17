@@ -16,9 +16,44 @@ serve(async (req) => {
   try {
     const { prompt, aiModel } = await req.json();
 
-    if (!prompt) {
+    // Input validation
+    if (!prompt || typeof prompt !== 'string') {
       return new Response(
-        JSON.stringify({ error: 'No prompt provided' }),
+        JSON.stringify({
+          error: 'A valid prompt is required to generate a tattoo design',
+          code: 'INVALID_PROMPT'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (prompt.length < 3) {
+      return new Response(
+        JSON.stringify({
+          error: 'Prompt must be at least 3 characters long',
+          code: 'PROMPT_TOO_SHORT'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (prompt.length > 1000) {
+      return new Response(
+        JSON.stringify({
+          error: 'Prompt must be less than 1000 characters',
+          code: 'PROMPT_TOO_LONG'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    const validModels = ['flux', 'openai', 'gptimage', 'stablediffusion', 'ideogram'];
+    if (aiModel && !validModels.includes(aiModel)) {
+      return new Response(
+        JSON.stringify({
+          error: `Invalid AI model. Supported models: ${validModels.join(', ')}`,
+          code: 'INVALID_MODEL'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -126,12 +161,87 @@ serve(async (req) => {
         throw new Error("No b64_json returned from GPT-image-1");
       }
     }
-    else if (aiModel === 'stablediffusion' || aiModel === 'ideogram') {
-      // For future implementation
-      return new Response(
-        JSON.stringify({ error: `${aiModel} integration is not yet implemented` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 501 }
-      );
+    else if (aiModel === 'stablediffusion') {
+      const apiKey = Deno.env.get('STABILITY_API_KEY');
+
+      if (!apiKey) {
+        throw new Error('STABILITY_API_KEY is not configured');
+      }
+
+      console.log("Calling Stability AI API with prompt:", prompt);
+      const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          text_prompts: [
+            {
+              text: prompt,
+              weight: 1
+            }
+          ],
+          cfg_scale: 7,
+          height: 1024,
+          width: 1024,
+          samples: 1,
+          steps: 30,
+          style_preset: "photographic"
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Stability AI API error:", errorData);
+        throw new Error(errorData.message || `Failed to generate image with Stability AI: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.artifacts && data.artifacts.length > 0) {
+        imageUrl = `data:image/png;base64,${data.artifacts[0].base64}`;
+      } else {
+        throw new Error("No image artifacts returned from Stability AI");
+      }
+    }
+    else if (aiModel === 'ideogram') {
+      const apiKey = Deno.env.get('IDEOGRAM_API_KEY');
+
+      if (!apiKey) {
+        throw new Error('IDEOGRAM_API_KEY is not configured');
+      }
+
+      console.log("Calling Ideogram API with prompt:", prompt);
+      const response = await fetch('https://api.ideogram.ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Api-Key': apiKey
+        },
+        body: JSON.stringify({
+          image_request: {
+            prompt: prompt,
+            aspect_ratio: "ASPECT_1_1",
+            model: "V_2",
+            magic_prompt_option: "AUTO",
+            style_type: "REALISTIC"
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Ideogram API error:", errorData);
+        throw new Error(errorData.error?.message || `Failed to generate image with Ideogram: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.data && data.data.length > 0) {
+        imageUrl = data.data[0].url;
+      } else {
+        throw new Error("No image data returned from Ideogram");
+      }
     }
     else {
       return new Response(
@@ -146,10 +256,40 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Tattoo generation error:', error);
+
+    // Determine appropriate error message and status code
+    let errorMessage = 'An unexpected error occurred while generating your tattoo';
+    let statusCode = 500;
+
+    if (error.message) {
+      if (error.message.includes('API key')) {
+        errorMessage = 'AI service configuration error. Please try again later.';
+        statusCode = 503;
+      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        errorMessage = 'AI service is currently busy. Please try again in a few minutes.';
+        statusCode = 429;
+      } else if (error.message.includes('content policy') || error.message.includes('safety')) {
+        errorMessage = 'Your prompt may contain content that violates our safety guidelines. Please try a different description.';
+        statusCode = 400;
+      } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+        statusCode = 503;
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
     return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({
+        error: errorMessage,
+        code: 'GENERATION_ERROR',
+        timestamp: new Date().toISOString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: statusCode
+      }
     );
   }
 });

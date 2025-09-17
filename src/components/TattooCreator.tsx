@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { 
@@ -17,6 +15,14 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Wand2, Download, Heart, Share2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
+import { DesignService } from '@/services/designService';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useProgress, type ProgressStep } from '@/hooks/useProgress';
+import { TattooGenerationProgress } from '@/components/ProgressIndicator';
+import { useMobileOptimizations } from '@/hooks/useMobileOptimizations';
+import MobileButton from '@/components/ui/mobile-button';
+import { MobileTextarea } from '@/components/ui/mobile-input';
+import { MobileSplitLayout, MobileCard } from '@/components/MobileOptimizedLayout';
 
 const TattooCreator: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -28,6 +34,30 @@ const TattooCreator: React.FC = () => {
   const [placement, setPlacement] = useState('');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const { handleError, createRetryAction } = useErrorHandler({
+    context: 'Tattoo Creator'
+  });
+
+  const mobile = useMobileOptimizations();
+
+  // Progress tracking for tattoo generation
+  const generationSteps: ProgressStep[] = [
+    { id: 'validate', label: 'Validating Input', description: 'Checking prompt and parameters', weight: 1, estimatedDuration: 2000 },
+    { id: 'generate', label: 'Generating Design', description: 'AI is creating your tattoo design', weight: 3, estimatedDuration: 15000 },
+    { id: 'process', label: 'Processing Image', description: 'Optimizing and enhancing the result', weight: 1, estimatedDuration: 3000 },
+    { id: 'save', label: 'Saving Design', description: 'Storing your design in the gallery', weight: 1, estimatedDuration: 2000 }
+  ];
+
+  const progressTracker = useProgress({
+    steps: generationSteps,
+    onComplete: () => {
+      console.log('Tattoo generation completed!');
+    },
+    onStepChange: (step, stepIndex) => {
+      console.log(`Starting step ${stepIndex + 1}: ${step.label}`);
+    }
+  });
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [pastGenerations, setPastGenerations] = useState<string[]>([]);
   const [finalPrompt, setFinalPrompt] = useState('');
@@ -53,27 +83,40 @@ const TattooCreator: React.FC = () => {
   
   const generateImage = async (promptText: string) => {
     setIsGenerating(true);
-    
+
     try {
+      // Step 2: Generate design (already in progress from handleGenerate)
+      progressTracker.updateStepProgress(25, 'Sending request to AI model...');
+
       const { data, error } = await supabase.functions.invoke('generate-tattoo', {
-        body: { 
+        body: {
           prompt: promptText,
           aiModel: aiModel
         }
       });
+
+      progressTracker.updateStepProgress(75, 'Processing AI response...');
       
       if (error) {
+        progressTracker.setError(new Error(error.message || 'Failed to generate image'));
         toast.error(error.message || 'Failed to generate image');
         console.error('Error generating image:', error);
         return null;
       }
-      
+
       if (data.error) {
+        progressTracker.setError(new Error(data.error));
         toast.error(data.error);
         console.error('Error from edge function:', data.error);
         return null;
       }
-      
+
+      // Step 3: Process image
+      progressTracker.nextStep('Processing and optimizing image...');
+      progressTracker.updateStepProgress(50, 'Optimizing image quality...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
+      progressTracker.nextStep('Image processing complete');
+
       return data.url;
     } catch (error) {
       console.error('Error generating image:', error);
@@ -89,27 +132,64 @@ const TattooCreator: React.FC = () => {
       toast.error('Please enter a description for your tattoo.');
       return;
     }
-    
+
     setIsGenerating(true);
-    
+    progressTracker.reset();
+    progressTracker.start();
+
+    // Step 1: Validate input
+    progressTracker.updateStepProgress(50, 'Preparing prompt and parameters...');
+
     const finalPromptText = [
       prompt,
       isPreviewMode ? 'Show as realistic tattoo on actual skin with proper lighting and texture.' : 'Show as clean design for printing.',
     ].filter(Boolean).join('. ');
-    
+
     setFinalPrompt(finalPromptText);
-    
+    progressTracker.nextStep('Starting AI generation...');
+
     try {
       const imageUrl = await generateImage(finalPromptText);
       
       if (imageUrl) {
         setGeneratedImage(imageUrl);
         setPastGenerations(prev => [imageUrl, ...prev.slice(0, 3)]);
-        toast.success('Your tattoo design has been generated!');
+
+        // Save the design to database if user is authenticated
+        const savedDesign = await DesignService.saveGeneratedDesign(
+          finalPromptText,
+          aiModel,
+          imageUrl,
+          undefined, // conversationId - could be added later
+          {
+            style: style || undefined,
+            technique: technique || undefined,
+            colorPalette: colorPalette || undefined,
+            bodyZone: placement || undefined,
+            subject: subject || undefined,
+            theme: composition || undefined
+          },
+          {
+            isPreviewMode,
+            originalPrompt: prompt,
+            enhancedPrompt: finalPromptText
+          }
+        );
+
+        // Step 4: Save design (final step)
+        progressTracker.updateStepProgress(100, 'Design saved successfully!');
+
+        if (savedDesign) {
+          toast.success('Your tattoo design has been generated and saved!');
+        } else {
+          toast.success('Your tattoo design has been generated!');
+        }
       }
     } catch (error) {
-      console.error('Error in handleGenerate:', error);
-      toast.error('Failed to generate design. Please try again.');
+      progressTracker.setError(error as Error);
+      handleError(error, 'Generate Tattoo', [
+        createRetryAction(() => handleGenerate(), 'Try Again')
+      ]);
     } finally {
       setIsGenerating(false);
     }
@@ -204,9 +284,10 @@ const TattooCreator: React.FC = () => {
   };
   
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      <div className="w-full lg:w-1/3 space-y-6">
-        <Card>
+    <MobileSplitLayout
+      left={
+        <div className="space-y-6">
+          <MobileCard>
           <CardHeader>
             <CardTitle>Design Your Tattoo</CardTitle>
             <CardDescription>
@@ -335,17 +416,17 @@ const TattooCreator: React.FC = () => {
             </div>
             
             <div className="space-y-2 pt-4">
-              <Label htmlFor="prompt">Describe Your Tattoo</Label>
-              <Textarea 
-                id="prompt"
+              <MobileTextarea
+                label="Describe Your Tattoo"
                 placeholder="Describe what you want in your tattoo design..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                className="min-h-32"
+                minRows={mobile.isMobile ? 4 : 3}
+                maxRows={mobile.isMobile ? 8 : 6}
+                autoResize
+                helperText="Be specific about subjects, elements, mood, and any symbolism you want to include."
+                mobileKeyboard="default"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Be specific about subjects, elements, mood, and any symbolism you want to include.
-              </p>
             </div>
             
             <div className="space-y-2 pt-2">
@@ -379,28 +460,30 @@ const TattooCreator: React.FC = () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-3">
-            <Button 
+            <MobileButton
               className="w-full bg-tattoo-purple hover:bg-tattoo-purple/90"
               onClick={handleGenerate}
               disabled={isGenerating}
+              loading={isGenerating}
+              hapticFeedback
             >
               {isGenerating ? 'Generating...' : 'Generate Tattoo'}
-            </Button>
-            <Button 
-              variant="outline" 
+            </MobileButton>
+            <MobileButton
+              variant="outline"
               className="w-full"
               onClick={handleMagicPrompt}
               disabled={isGenerating}
             >
               <Wand2 className="mr-2 h-4 w-4" />
               Magic Prompt
-            </Button>
+            </MobileButton>
           </CardFooter>
-        </Card>
-      </div>
-      
-      <div className="w-full lg:w-2/3">
-        <Card className="h-full">
+          </MobileCard>
+        </div>
+      }
+      right={
+        <MobileCard className="h-full">
           <CardHeader>
             <CardTitle>Generated Design</CardTitle>
             <CardDescription>
@@ -411,10 +494,12 @@ const TattooCreator: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {isGenerating ? (
-              <div className="flex flex-col items-center justify-center aspect-video bg-muted rounded-lg">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-tattoo-purple mb-4"></div>
-                <p className="text-muted-foreground">Generating your tattoo {isPreviewMode ? 'preview' : 'design'}...</p>
-              </div>
+              <TattooGenerationProgress
+                progress={progressTracker}
+                onPause={progressTracker.pause}
+                onResume={progressTracker.resume}
+                onReset={progressTracker.reset}
+              />
             ) : generatedImage ? (
               <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
                 <img 
@@ -423,16 +508,37 @@ const TattooCreator: React.FC = () => {
                   className="w-full h-full object-contain"
                 />
                 
-                <div className="absolute bottom-3 right-3 flex space-x-2">
-                  <Button size="sm" variant="secondary" onClick={handleDownload}>
+                <div className={`absolute ${mobile.isMobile ? 'bottom-2 left-2 right-2' : 'bottom-3 right-3'} flex ${mobile.isMobile ? 'justify-center space-x-3' : 'space-x-2'}`}>
+                  <MobileButton
+                    size={mobile.isMobile ? "mobile-sm" : "sm"}
+                    variant="secondary"
+                    onClick={handleDownload}
+                    hapticFeedback
+                    className={mobile.isMobile ? "flex-1" : ""}
+                  >
                     <Download className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleSave}>
+                    {mobile.isMobile && <span className="ml-2">Download</span>}
+                  </MobileButton>
+                  <MobileButton
+                    size={mobile.isMobile ? "mobile-sm" : "sm"}
+                    variant="secondary"
+                    onClick={handleSave}
+                    hapticFeedback
+                    className={mobile.isMobile ? "flex-1" : ""}
+                  >
                     <Heart className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleShare}>
+                    {mobile.isMobile && <span className="ml-2">Save</span>}
+                  </MobileButton>
+                  <MobileButton
+                    size={mobile.isMobile ? "mobile-sm" : "sm"}
+                    variant="secondary"
+                    onClick={handleShare}
+                    hapticFeedback
+                    className={mobile.isMobile ? "flex-1" : ""}
+                  >
                     <Share2 className="h-4 w-4" />
-                  </Button>
+                    {mobile.isMobile && <span className="ml-2">Share</span>}
+                  </MobileButton>
                 </div>
               </div>
             ) : (
@@ -487,9 +593,9 @@ const TattooCreator: React.FC = () => {
               </>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+          </MobileCard>
+      }
+    />
   );
 };
 

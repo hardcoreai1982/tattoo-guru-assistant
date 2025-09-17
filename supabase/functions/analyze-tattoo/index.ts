@@ -16,11 +16,46 @@ serve(async (req) => {
   try {
     const { image, mode = 'design', subject = '', enhancePrompt = false, details = {} } = await req.json();
 
+    // Input validation
+    if (!enhancePrompt && (!image || typeof image !== 'string')) {
+      return new Response(
+        JSON.stringify({
+          error: 'A valid image is required for tattoo analysis',
+          code: 'INVALID_IMAGE'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (image && !image.startsWith('data:image/')) {
+      return new Response(
+        JSON.stringify({
+          error: 'Image must be in base64 data URL format',
+          code: 'INVALID_IMAGE_FORMAT'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    const validModes = ['design', 'preview'];
+    if (mode && !validModes.includes(mode)) {
+      return new Response(
+        JSON.stringify({
+          error: `Invalid analysis mode. Supported modes: ${validModes.join(', ')}`,
+          code: 'INVALID_MODE'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        JSON.stringify({
+          error: 'AI service configuration error. Please try again later.',
+          code: 'SERVICE_UNAVAILABLE'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 503 }
       );
     }
 
@@ -192,10 +227,43 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Tattoo analysis error:', error);
+
+    // Determine appropriate error message and status code
+    let errorMessage = 'An unexpected error occurred while analyzing your tattoo';
+    let statusCode = 500;
+
+    if (error.message) {
+      if (error.message.includes('API key')) {
+        errorMessage = 'AI service configuration error. Please try again later.';
+        statusCode = 503;
+      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        errorMessage = 'AI service is currently busy. Please try again in a few minutes.';
+        statusCode = 429;
+      } else if (error.message.includes('image') && error.message.includes('invalid')) {
+        errorMessage = 'The uploaded image format is not supported. Please try a different image.';
+        statusCode = 400;
+      } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+        statusCode = 503;
+      } else if (error.message.includes('content policy') || error.message.includes('safety')) {
+        errorMessage = 'The image content may violate our safety guidelines. Please try a different image.';
+        statusCode = 400;
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
     return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({
+        error: errorMessage,
+        code: 'ANALYSIS_ERROR',
+        timestamp: new Date().toISOString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: statusCode
+      }
     );
   }
 });

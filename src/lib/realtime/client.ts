@@ -82,17 +82,19 @@ export class RealtimeClient {
   }
 
   private async connectWebRTC(): Promise<void> {
-    // Create ephemeral token (this would call your API)
-    const tokenResponse = await fetch('/api/realtime/ephemeral', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    // Create ephemeral token via Supabase function
+    const { supabase } = await import('@/integrations/supabase/client');
+
+    const { data, error } = await supabase.functions.invoke('realtime-ephemeral', {
+      body: {},
     });
-    
-    if (!tokenResponse.ok) {
-      throw new Error('Failed to get ephemeral token');
+
+    if (error || !data) {
+      console.error('Supabase function error:', error);
+      throw new Error(error?.message || 'Failed to get ephemeral token');
     }
 
-    const { client_secret } = await tokenResponse.json();
+    const { client_secret } = data;
 
     // Set up WebRTC peer connection
     this.pc = new RTCPeerConnection();
@@ -151,17 +153,19 @@ export class RealtimeClient {
   }
 
   private async connectWebSocket(): Promise<void> {
-    // Create ephemeral token
-    const tokenResponse = await fetch('/api/realtime/ephemeral', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    // Create ephemeral token via Supabase function
+    const { supabase } = await import('@/integrations/supabase/client');
+
+    const { data, error } = await supabase.functions.invoke('realtime-ephemeral', {
+      body: {},
     });
-    
-    if (!tokenResponse.ok) {
-      throw new Error('Failed to get ephemeral token');
+
+    if (error || !data) {
+      console.error('Supabase function error:', error);
+      throw new Error(error?.message || 'Failed to get ephemeral token');
     }
 
-    const { client_secret } = await tokenResponse.json();
+    const { client_secret } = data;
 
     // Connect via WebSocket for Push-to-Talk mode
     this.ws = new WebSocket(

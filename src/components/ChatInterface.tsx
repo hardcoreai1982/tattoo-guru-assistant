@@ -5,7 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Send, Upload, Volume2 } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
 import { sendMessage, executeToolCall, type Message, type ToolCall } from '@/services/chatService';
+import { ConversationService, type ConversationWithMessages } from '@/services/conversationService';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { ChatLoading } from '@/components/LoadingState';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -17,11 +21,41 @@ const ChatInterface: React.FC = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { handleError, createRetryAction } = useErrorHandler({
+    context: 'Chat Interface'
+  });
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Check authentication status and initialize conversation
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsAuthenticated(!!user);
+
+      if (user && !currentConversationId) {
+        // Create a new conversation for authenticated users
+        const conversation = await ConversationService.createConversation('text_chat');
+        if (conversation) {
+          setCurrentConversationId(conversation.id);
+          // Add the initial bot message to the conversation
+          await ConversationService.addMessage(
+            conversation.id,
+            'assistant',
+            "Hi there! I'm your Tattoo Buddy. What can I help you with today? Whether you're looking for design inspiration, aftercare advice, or information about different tattoo styles, I'm here to assist!"
+          );
+        }
+      }
+    };
+
+    checkAuth();
+  }, [currentConversationId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,10 +71,20 @@ const ChatInterface: React.FC = () => {
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = inputMessage;
     setInputMessage('');
     setIsLoading(true);
 
     try {
+      // Save user message to database if authenticated
+      if (isAuthenticated && currentConversationId) {
+        await ConversationService.addMessage(
+          currentConversationId,
+          'user',
+          currentInput
+        );
+      }
+
       // Send message to the OpenAI API
       const botResponse = await sendMessage([...messages, userMessage]);
       
@@ -82,11 +126,23 @@ const ChatInterface: React.FC = () => {
       } else {
         // If no tool calls, add the bot response directly
         setMessages(prev => [...prev, botResponse]);
+
+        // Save bot response to database if authenticated
+        if (isAuthenticated && currentConversationId && botResponse.content) {
+          await ConversationService.addMessage(
+            currentConversationId,
+            'assistant',
+            botResponse.content,
+            undefined,
+            botResponse.toolCalls
+          );
+        }
       }
     } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error("Failed to get a response. Please try again.");
-      
+      handleError(error, 'Send Message', [
+        createRetryAction(() => handleSendMessage(), 'Try Again')
+      ]);
+
       // Add error message to chat
       setMessages(prev => [...prev, {
         type: 'bot',

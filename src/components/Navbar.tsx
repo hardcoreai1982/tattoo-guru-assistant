@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Menu, X, User } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import { supabase } from '@/integrations/supabase/client';
+import { useMobileOptimizations } from '@/hooks/useMobileOptimizations';
+import MobileButton from '@/components/ui/mobile-button';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
+  const mobile = useMobileOptimizations();
 
   useEffect(() => {
     // Check for existing session
@@ -58,20 +61,26 @@ const Navbar: React.FC = () => {
           <Link to="/chat" className="font-medium hover:text-tattoo-purple transition-colors">
             AI Chat
           </Link>
+          <Link to="/voice-chat" className="font-medium hover:text-tattoo-purple transition-colors">
+            Voice Chat
+          </Link>
+          <Link to="/gallery" className="font-medium hover:text-tattoo-purple transition-colors">
+            Gallery
+          </Link>
           <Link to="/about" className="font-medium hover:text-tattoo-purple transition-colors">
             About Us
           </Link>
           <ThemeToggle />
           {user ? (
-            <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
+            <MobileButton className="bg-tattoo-purple hover:bg-tattoo-purple/90">
               <Link to="/profile" className="flex items-center gap-2">
                 <User size={16} /> Profile
               </Link>
-            </Button>
+            </MobileButton>
           ) : (
-            <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90">
+            <MobileButton className="bg-tattoo-purple hover:bg-tattoo-purple/90">
               <Link to="/signin">Sign In</Link>
-            </Button>
+            </MobileButton>
           )}
         </div>
 
@@ -124,30 +133,50 @@ const Navbar: React.FC = () => {
             >
               Create Tattoo
             </Link>
-            <Link 
-              to="/chat" 
+            <Link
+              to="/chat"
               className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               AI Chat
             </Link>
-            <Link 
-              to="/about" 
+            <Link
+              to="/voice-chat"
+              className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Voice Chat
+            </Link>
+            <Link
+              to="/gallery"
+              className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Gallery
+            </Link>
+            <Link
+              to="/about"
               className="px-4 py-2 hover:bg-secondary rounded-md transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               About Us
             </Link>
             {user ? (
-              <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
+              <MobileButton
+                className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full"
+                hapticFeedback
+              >
                 <Link to="/profile" className="flex items-center gap-2 justify-center w-full">
                   <User size={16} /> Profile
                 </Link>
-              </Button>
+              </MobileButton>
             ) : (
-              <Button className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full">
+              <MobileButton
+                className="bg-tattoo-purple hover:bg-tattoo-purple/90 w-full"
+                hapticFeedback
+              >
                 <Link to="/signin">Sign In</Link>
-              </Button>
+              </MobileButton>
             )}
           </div>
         </div>
